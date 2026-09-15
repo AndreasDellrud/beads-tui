@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::{
+    agent::AgentKind,
     app::{App, Screen, ScrollPane},
     bd::Issue,
 };
@@ -20,9 +21,9 @@ const GREEN: Color = Color::Rgb(166, 227, 161);
 const YELLOW: Color = Color::Rgb(249, 226, 175);
 const RED: Color = Color::Rgb(243, 139, 168);
 
-pub fn draw(frame: &mut Frame, app: &mut App) {
+pub fn draw(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>) {
     if app.screen == Screen::Issue {
-        draw_issue_screen(frame, app);
+        draw_issue_screen(frame, app, agent);
         return;
     }
     let page = Layout::vertical([
@@ -37,10 +38,12 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let (list, detail) = browser_panes(page[1]);
     draw_list(frame, list, app);
     draw_detail(frame, detail, app);
-    draw_footer(frame, page[2], app);
+    let (status_area, keybindings_area) = footer_areas(page[2]);
+    draw_browser_status(frame, status_area, app);
+    draw_keybindings(frame, keybindings_area, browser_keybindings(agent));
 }
 
-fn draw_issue_screen(frame: &mut Frame, app: &mut App) {
+fn draw_issue_screen(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>) {
     let page = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(8),
@@ -140,18 +143,21 @@ fn draw_issue_screen(frame: &mut Frame, app: &mut App) {
         relationships_area,
     );
 
-    let footer = if let Some(error) = &app.error {
+    let (status_area, keybindings_area) = footer_areas(page[2]);
+    let status = if let Some(status) =
+        launch_status_line(app.work_message.as_deref(), app.work_error.as_deref())
+    {
+        status
+    } else if let Some(error) = &app.error {
         Line::styled(
-            format!(" error · {error} · r retry · esc back "),
+            format!(" error · {error} · r retry "),
             Style::default().fg(RED),
         )
     } else {
-        Line::styled(
-            " wheel/↑↓/jk scroll detail   tab/shift-tab relationships   enter follow   r reload   esc back   q quit ",
-            Style::default().fg(MUTED),
-        )
+        Line::default()
     };
-    frame.render_widget(Paragraph::new(footer), page[2]);
+    frame.render_widget(Paragraph::new(status), status_area);
+    draw_keybindings(frame, keybindings_area, issue_keybindings(agent));
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
@@ -194,7 +200,7 @@ fn draw_list(frame: &mut Frame, area: Rect, app: &mut App) {
     let block = panel(if app.filter.is_empty() {
         " Issues ".to_owned()
     } else {
-        format!(" Issues · /{} · c clear ", app.filter)
+        format!(" Issues · /{} · x clear ", app.filter)
     });
     let inner = block.inner(area);
     app.update_list_viewport(usize::from(inner.height));
@@ -426,8 +432,48 @@ fn section(lines: &mut Vec<Line<'static>>, heading: &str, body: &str) {
     lines.push(Line::default());
 }
 
-fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
-    let line = if let Some(error) = &app.error {
+fn footer_areas(area: Rect) -> (Rect, Rect) {
+    let rows = Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).split(area);
+    (rows[0], rows[1])
+}
+
+fn launch_status_line(message: Option<&str>, error: Option<&str>) -> Option<Line<'static>> {
+    if let Some(error) = error {
+        Some(Line::from(vec![
+            Span::styled(
+                " Work error ",
+                Style::default()
+                    .bg(RED)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {error} · esc dismiss · w retry · shift-w retry here "),
+                Style::default().fg(RED),
+            ),
+        ]))
+    } else {
+        message.map(|message| {
+            Line::from(vec![
+                Span::styled(
+                    " Work ",
+                    Style::default()
+                        .bg(GREEN)
+                        .fg(Color::Black)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!(" {message} "), Style::default().fg(GREEN)),
+            ])
+        })
+    }
+}
+
+fn draw_browser_status(frame: &mut Frame, area: Rect, app: &App) {
+    let line = if let Some(status) =
+        launch_status_line(app.work_message.as_deref(), app.work_error.as_deref())
+    {
+        status
+    } else if let Some(error) = &app.error {
         Line::from(vec![
             Span::styled(
                 " error ",
@@ -479,12 +525,33 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
             ),
         ])
     } else {
-        Line::styled(
-            " ↑↓/jk navigate   1 active  2 ready  3 closed   s sort   / filter   c clear   r refresh   q quit ",
-            Style::default().fg(MUTED),
-        )
+        Line::default()
     };
     frame.render_widget(Paragraph::new(line), area);
+}
+
+fn draw_keybindings(frame: &mut Frame, area: Rect, line: Line<'static>) {
+    frame.render_widget(Paragraph::new(line), area);
+}
+
+fn browser_keybindings(agent: Option<AgentKind>) -> Line<'static> {
+    let agent = agent.map_or("no agent", AgentKind::display_name);
+    Line::styled(
+        format!(
+            " ↑↓/jk navigate   enter details   w start {agent}   a/A agent   1/2/3 views   s sort   / filter   r refresh   q quit "
+        ),
+        Style::default().fg(MUTED),
+    )
+}
+
+fn issue_keybindings(agent: Option<AgentKind>) -> Line<'static> {
+    let agent = agent.map_or("no agent", AgentKind::display_name);
+    Line::styled(
+        format!(
+            " wheel/↑↓/jk scroll   tab/shift-tab relationships   enter follow   w start {agent}   a/A agent   r reload   esc back "
+        ),
+        Style::default().fg(MUTED),
+    )
 }
 
 fn panel(title: String) -> Block<'static> {
@@ -533,6 +600,39 @@ fn selected_row_style(style: Style, selected: bool) -> Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_status_is_separate_from_persistent_keybindings() {
+        let success = launch_status_line(Some("Started Codex"), None).unwrap();
+        let error = launch_status_line(None, Some("could not focus")).unwrap();
+
+        assert!(success.to_string().contains("Started Codex"));
+        assert!(error.to_string().contains("esc dismiss"));
+        assert!(
+            browser_keybindings(Some(AgentKind::Claude))
+                .to_string()
+                .contains("w start Claude Code")
+        );
+        assert!(
+            browser_keybindings(None)
+                .to_string()
+                .contains("w start no agent")
+        );
+        assert!(
+            issue_keybindings(Some(AgentKind::Codex))
+                .to_string()
+                .contains("esc back")
+        );
+    }
+
+    #[test]
+    fn footer_rows_stay_inside_short_terminals() {
+        let area = Rect::new(0, 0, 60, 1);
+        let (status, keybindings) = footer_areas(area);
+
+        assert!(status.bottom() <= area.bottom());
+        assert!(keybindings.bottom() <= area.bottom());
+    }
 
     #[test]
     fn mouse_target_tracks_wide_browser_panes() {

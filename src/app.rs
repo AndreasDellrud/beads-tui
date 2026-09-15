@@ -285,6 +285,8 @@ pub struct App {
     pub screen: Screen,
     pub loading_detail: bool,
     pub relationship_index: usize,
+    pub work_message: Option<String>,
+    pub work_error: Option<String>,
     list_page_len: usize,
     relationship_page_len: usize,
     preview_scroll_max: u16,
@@ -327,6 +329,8 @@ impl App {
             screen: Screen::default(),
             loading_detail: false,
             relationship_index: 0,
+            work_message: None,
+            work_error: None,
             list_page_len: 0,
             relationship_page_len: 0,
             preview_scroll_max: 0,
@@ -358,6 +362,7 @@ impl App {
                             let selected_id = self.selected_issue().map(|issue| issue.id.clone());
                             self.issues = issues;
                             self.rebuild_visible_preserving(selected_id);
+                            self.refresh_open_issue_if_stale();
                             self.error = None;
                             if self.revision.is_none() && !self.checking_revision {
                                 self.request_revision(Instant::now());
@@ -435,6 +440,36 @@ impl App {
 
     pub fn refresh(&mut self) {
         self.request_list(true);
+    }
+
+    pub fn work_issue(&self) -> Option<&Issue> {
+        match self.screen {
+            Screen::Browser => self.selected_issue(),
+            Screen::Issue => self.detail.as_ref(),
+        }
+    }
+
+    pub fn clear_work_feedback(&mut self) {
+        self.work_message = None;
+        self.work_error = None;
+    }
+
+    pub fn clear_work_success(&mut self) {
+        self.work_message = None;
+    }
+
+    pub fn dismiss_work_error(&mut self) -> bool {
+        self.work_error.take().is_some()
+    }
+
+    pub fn report_work_started(&mut self, message: String, warning: Option<String>) {
+        self.work_message = Some(message);
+        self.work_error = warning;
+    }
+
+    pub fn report_work_error(&mut self, error: impl Into<String>) {
+        self.work_message = None;
+        self.work_error = Some(error.into());
     }
 
     fn refresh_quietly(&mut self) {
@@ -795,7 +830,30 @@ impl App {
         self.list_scroll = selection.unwrap_or(0);
         self.ensure_selected_issue_visible();
         self.preview_scroll = 0;
-        self.select_detail();
+        if self.screen == Screen::Browser {
+            self.select_detail();
+        }
+    }
+
+    fn refresh_open_issue_if_stale(&mut self) {
+        if self.screen != Screen::Issue || self.loading_detail {
+            return;
+        }
+        let Some(current) = self.detail.as_ref() else {
+            return;
+        };
+        let Some(preview) = self
+            .issues
+            .iter()
+            .find(|issue| issue.id == current.id)
+            .cloned()
+        else {
+            return;
+        };
+        if preview.updated_at != current.updated_at {
+            self.detail_cache.remove(&preview.id);
+            self.request_issue_detail(preview);
+        }
     }
 
     fn select_detail(&mut self) {
@@ -1176,6 +1234,22 @@ mod tests {
     }
 
     #[test]
+    fn work_success_is_transient_but_errors_require_explicit_dismissal() {
+        let mut harness = test_app(Duration::ZERO, false);
+        harness
+            .app
+            .report_work_started("Started Codex".to_owned(), Some("focus warning".to_owned()));
+
+        harness.app.clear_work_success();
+        assert_eq!(harness.app.work_message, None);
+        assert_eq!(harness.app.work_error.as_deref(), Some("focus warning"));
+
+        assert!(harness.app.dismiss_work_error());
+        assert_eq!(harness.app.work_error, None);
+        assert!(!harness.app.dismiss_work_error());
+    }
+
+    #[test]
     fn pane_scrolling_is_bounded_and_does_not_change_issue_selection() {
         let mut harness = test_app(Duration::ZERO, false);
         wait_until(&mut harness.app, |app| !app.loading_list);
@@ -1254,6 +1328,25 @@ mod tests {
         harness.app.open_selected_issue();
         assert!(!harness.app.loading_detail);
         assert_eq!(harness.show_calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn list_refresh_preserves_and_reloads_stale_open_issue_detail() {
+        let mut harness = test_app(Duration::ZERO, false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        harness.app.open_selected_issue();
+        wait_until(&mut harness.app, |app| !app.loading_detail);
+        assert_eq!(harness.app.detail.as_ref().unwrap().comments.len(), 1);
+
+        harness.issues.lock().unwrap()[0].updated_at = "v2".to_owned();
+        harness.app.refresh();
+        wait_until(&mut harness.app, |app| {
+            !app.loading_list && !app.loading_detail
+        });
+
+        assert_eq!(harness.app.screen, Screen::Issue);
+        assert_eq!(harness.app.detail.as_ref().unwrap().updated_at, "v2");
+        assert_eq!(harness.app.detail.as_ref().unwrap().comments.len(), 1);
     }
 
     #[test]

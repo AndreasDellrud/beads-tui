@@ -1,6 +1,6 @@
 # Agent Instructions
 
-`btui` is a read-only Rust/Ratatui browser over the installed `bd` CLI. Implemented behavior is described by code and tests; `docs/product.md` defines the intended first-release boundary, and Beads owns all unfinished work.
+`btui` is a Rust/Ratatui browser and work-session launcher over the installed `bd`, Codex, and Claude Code CLIs. Its own Beads adapter is read-only. Implemented behavior is described by code and tests; `docs/product.md` defines product boundaries, and Beads owns all unfinished work.
 
 ## Working contract
 
@@ -8,6 +8,8 @@
 - Keep `bd` as the data authority. Invoke it directly with `--readonly` and JSON output; do not read Dolt internals or `.beads/issues.jsonl`.
 - Preserve current-working-directory discovery so `btui` and direct `bd` commands resolve the same workspace.
 - Keep rendering in `src/ui.rs`, interaction state in `src/app.rs`, and command/JSON adaptation in `src/bd.rs`.
+- Keep task-to-agent prompt, eligibility, and executor process control in `src/work.rs`; pass task identity rather than copied Beads descriptions.
+- Keep installed-agent detection and the persisted btui-owned default in `src/agent.rs`; do not introduce an Omarchy dependency.
 - Avoid blocking UI work in new features; the synchronous starter adapter is a known MVP boundary tracked in Beads.
 - Track accepted unfinished work only in Beads. Keep durable product and architecture knowledge in `docs/`, cataloged by `docs/index.md` and noted in `docs/log.md`.
 - Treat `main` as protected. Put changes on a feature branch and merge them through a pull request after GitHub Actions passes; never plan on a direct push to `main`.

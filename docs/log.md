@@ -1,7 +1,15 @@
 # Documentation log
 
+## 2026-09-16
+
+- Added a btui-owned Codex/Claude Code selector with installed-executable detection, XDG persistence, visible `a`/`A` shifting, executor-neutral prompts, and generic foreground/Herdr launch adapters without an Omarchy dependency.
+- Changed managed launches from Codex-specific tabs to branch-backed Herdr worktree workspaces so every supported executor receives the same checkout-isolation guarantee.
+
 ## 2026-09-15
 
+- Separated launch feedback from persistent keybindings; successful Codex status clears on the next interaction while launch errors remain explicitly dismissible.
+- Preserved Herdr-managed Codex sessions across first-run hook confirmation and resumed the original task prompt after explicit approval without bypassing hook trust.
+- Added executor-neutral task-to-work-session orchestration, canonical bead-ID prompts, safe foreground terminal handoff, and Herdr-managed Codex tabs without adding direct Beads mutations to `btui`.
 - Completed the manual release workflow: validate the requested Cargo version from protected `main`, refuse existing tags/releases, retain the build artifact, create the version tag, generate categorized notes, and publish the archive plus checksum on GitHub Releases.
 - Recorded protected `main` as the repository workflow: changes merge through pull requests after GitHub Actions passes.
 - Recorded the public GitHub repository in Cargo metadata and exposed its passing CI workflow from the README.
