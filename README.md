@@ -33,7 +33,7 @@ btui
 
 This installs the `btui` executable into Cargo's binary directory, normally `~/.cargo/bin`. Remove it with `cargo uninstall beads-tui`.
 
-The manually triggered or version-tagged **Build release artifact** GitHub Actions workflow also produces a Linux x86-64 archive and SHA-256 checksum. It stores them as workflow artifacts without publishing a GitHub Release. After downloading and verifying an artifact:
+The manually dispatched **Release** GitHub Actions workflow creates a matching version tag and GitHub Release with generated notes, a Linux x86-64 archive, and its SHA-256 checksum. Published versions are available from the [GitHub releases page](https://github.com/AndreasDellrud/beads-tui/releases). After downloading an archive and checksum:
 
 ```bash
 sha256sum --check btui-*.tar.gz.sha256
@@ -49,6 +49,6 @@ install -Dm755 btui-*/btui ~/.local/bin/btui
 
 The application always invokes `bd` with `--readonly`. Beads remains the source of truth; this project does not read Dolt internals or `.beads/issues.jsonl`.
 
-GitHub Actions runs the same validation script on pushes and pull requests. Release preparation and the intentionally manual publication boundary are documented in [docs/releasing.md](docs/releasing.md).
+GitHub Actions runs the same validation script on pushes and pull requests. Release preparation and the intentionally manual publication flow are documented in [docs/releasing.md](docs/releasing.md).
 
 Project intent and boundaries are maintained in [docs/product.md](docs/product.md) and [docs/architecture.md](docs/architecture.md). Live work is tracked only in Beads (`bd ready`, `bd list`).

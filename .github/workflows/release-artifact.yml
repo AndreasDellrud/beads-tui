@@ -1,17 +1,20 @@
-name: Build release artifact
+name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version from Cargo.toml, without the v prefix
+        required: true
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
   RUSTUP_TOOLCHAIN: 1.88.0
+  RELEASE_TAG: v${{ inputs.version }}
 
 jobs:
   linux-x86-64:
@@ -25,12 +28,28 @@ jobs:
       - name: Install the minimum supported Rust toolchain
         run: rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt
 
-      - name: Validate tag version
-        if: github.ref_type == 'tag'
+      - name: Validate release request
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           package_version=$(cargo pkgid | sed 's/.*#//')
-          test "${GITHUB_REF_NAME}" = "v${package_version}"
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Releases must be dispatched from main, not ${GITHUB_REF}." >&2
+            exit 1
+          fi
+          if [[ "${RELEASE_TAG}" != "v${package_version}" ]]; then
+            echo "Requested ${RELEASE_TAG}, but Cargo.toml contains ${package_version}." >&2
+            exit 1
+          fi
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Tag ${RELEASE_TAG} already exists; refusing to move it." >&2
+            exit 1
+          fi
 
       - name: Validate
         run: ./scripts/validate
@@ -45,3 +64,17 @@ jobs:
           path: dist/*
           if-no-files-found: error
           retention-days: 14
+
+      - name: Create tag and publish GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: btui ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: true
+          working_directory: dist
+          files: |
+            *.tar.gz
+            *.tar.gz.sha256

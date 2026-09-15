@@ -8,10 +8,10 @@ The source installation path is:
 cargo install --path . --locked
 ```
 
-GitHub Actions owns repeatable CI and artifact construction:
+GitHub Actions owns repeatable CI and release construction:
 
 - **CI** runs `./scripts/validate` and verifies `cargo package --locked` on pushes, pull requests, and manual dispatches.
-- **Build release artifact** runs validation, builds a locked Linux x86-64 binary, packages it with the README and license, generates a SHA-256 checksum, and uploads both to the workflow run for 14 days.
+- **Release** is manually dispatched from `main` with the intended Cargo version. It validates the request, builds the locked Linux x86-64 archive and checksum, retains them as a workflow artifact for 14 days, creates the matching `v<version>` tag, generates release notes, and publishes both files on a GitHub Release.
 
 Both workflows use Rust 1.88.0, the declared minimum supported version. The local packaging equivalent is:
 
@@ -27,14 +27,18 @@ Artifacts are written to `dist/` and are not committed.
 2. Move the matching changelog section from `Unreleased` to the release date.
 3. Run `./scripts/validate` and `cargo package --locked`.
 4. Run `./scripts/package x86_64-unknown-linux-gnu` and verify its checksum.
-5. Create a `v<version>` tag only after the release contents are accepted.
+5. Merge the release preparation pull request into protected `main` after CI passes.
+6. Open **Actions → Release → Run workflow**, select `main`, enter the version without `v`, and run it.
+7. Verify the resulting tag, generated notes, archive, and checksum from the public Releases page.
 
-The tag-triggered workflow rejects a tag whose name does not match `Cargo.toml`.
+The workflow rejects a non-`main` dispatch, a version that differs from `Cargo.toml`, or an existing tag or release. Its write permission is scoped to the release workflow; ordinary CI retains read-only repository permissions.
 
-## Publication boundary
+## Reruns and failures
 
-The prepared workflow creates temporary GitHub Actions artifacts only. It does not publish to crates.io, create a GitHub Release, push tags, or modify Beads state. Those operations require an explicit owner decision after the release policy is accepted.
+Failures before the final publication step are safe to rerun with the same input. Do not blindly rerun after **Create tag and publish GitHub Release** begins: first inspect the repository's Releases and Tags pages. If an incomplete draft, release, or tag exists, remove only that incomplete release state before retrying. A completed release is immutable for this workflow; it deliberately refuses to overwrite or move it.
 
-The public repository protects `main`. Release preparation and ordinary changes must merge through pull requests with passing GitHub Actions rather than direct pushes.
+The workflow does not publish to crates.io or modify Beads state. Those remain separate owner decisions.
+
+The public repository protects `main`. Release preparation and ordinary changes must merge through pull requests with passing GitHub Actions rather than direct pushes. Manually dispatching **Release** from `main` is the explicit publication decision.
 
 Before closing a release, verify that `btui` restores the alternate screen and mouse-capture state after both normal use and a visible Beads workspace error. Wide and narrow layouts require explicit owner acceptance.

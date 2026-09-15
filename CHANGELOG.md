@@ -2,7 +2,7 @@
 
 All notable changes to `btui` are recorded here.
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-09-15
 
 - Browse active, ready, and closed Beads issues with filtering and sorting.
 - Preview list-backed issue information without blocking navigation.

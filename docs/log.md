@@ -2,6 +2,7 @@
 
 ## 2026-09-15
 
+- Completed the manual release workflow: validate the requested Cargo version from protected `main`, refuse existing tags/releases, retain the build artifact, create the version tag, generate categorized notes, and publish the archive plus checksum on GitHub Releases.
 - Recorded protected `main` as the repository workflow: changes merge through pull requests after GitHub Actions passes.
 - Recorded the public GitHub repository in Cargo metadata and exposed its passing CI workflow from the README.
 - Prepared Cargo installation and Linux binary packaging, added SHA-256 release artifacts, and placed push/pull-request validation plus manual/tagged artifact construction in GitHub Actions without enabling publication.
