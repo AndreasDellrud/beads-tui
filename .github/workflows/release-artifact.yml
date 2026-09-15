@@ -16,8 +16,8 @@ env:
   RUSTUP_TOOLCHAIN: 1.88.0
   RELEASE_TAG: v${{ inputs.version }}
 
-# Serialize attempts for a version so a queued duplicate observes the tag or
-# release created by the first run before it reaches publication.
+# Prevent concurrent publication attempts for one version. GitHub retains the
+# active run and only the newest pending duplicate for a concurrency group.
 concurrency:
   group: release-v${{ inputs.version }}
   cancel-in-progress: false
