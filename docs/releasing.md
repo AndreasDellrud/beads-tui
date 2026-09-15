@@ -31,7 +31,7 @@ Artifacts are written to `dist/` and are not committed.
 6. Open **Actions → Release → Run workflow**, select `main`, enter the version without `v`, and run it.
 7. Verify the resulting tag, generated notes, archive, and checksum from the public Releases page.
 
-The workflow rejects a non-`main` dispatch, a version that differs from `Cargo.toml`, or an existing tag or release. Its write permission is scoped to the release workflow; ordinary CI retains read-only repository permissions.
+The workflow rejects a non-`main` dispatch, a version that differs from `Cargo.toml`, or an existing tag or release. Runs for the same requested version cannot overlap. GitHub retains one active run and at most the newest pending duplicate for that version; dispatching another duplicate cancels and replaces the older pending run. After the active run publishes, the surviving pending run fails the existing tag or release check instead of replacing assets. This is intentional because requests for the same version are redundant. The workflow's write permission is scoped to the release workflow; ordinary CI retains read-only repository permissions.
 
 ## Reruns and failures
 
