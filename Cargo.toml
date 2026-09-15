@@ -1,9 +1,9 @@
 [package]
 name = "beads-tui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
-description = "A human-friendly, read-only terminal browser for Beads issues"
+description = "A human-friendly terminal browser and work-session launcher for Beads"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/AndreasDellrud/beads-tui"
