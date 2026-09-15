@@ -10,6 +10,7 @@
 - Keep rendering in `src/ui.rs`, interaction state in `src/app.rs`, and command/JSON adaptation in `src/bd.rs`.
 - Avoid blocking UI work in new features; the synchronous starter adapter is a known MVP boundary tracked in Beads.
 - Track accepted unfinished work only in Beads. Keep durable product and architecture knowledge in `docs/`, cataloged by `docs/index.md` and noted in `docs/log.md`.
+- Treat `main` as protected. Put changes on a feature branch and merge them through a pull request after GitHub Actions passes; never plan on a direct push to `main`.
 - Do not commit, push Git refs, configure a remote, publish a crate, or sync Dolt state without explicit user authorization.
 
 ## Commands

@@ -1,5 +1,7 @@
 # beads-tui
 
+[![CI](https://github.com/AndreasDellrud/beads-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreasDellrud/beads-tui/actions/workflows/ci.yml)
+
 `btui` is a human-friendly, read-only terminal browser for [Beads](https://github.com/gastownhall/beads). It turns the structured output of `bd list` and `bd show` into a fast two-pane view without becoming a second task database.
 
 The first slice supports issue navigation, detail viewing, active/ready/closed views, useful filtering, sorting, automatic external-change refresh, responsive narrow-terminal layout, and status/priority styling.

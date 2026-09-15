@@ -2,6 +2,8 @@
 
 ## 2026-09-15
 
+- Recorded protected `main` as the repository workflow: changes merge through pull requests after GitHub Actions passes.
+- Recorded the public GitHub repository in Cargo metadata and exposed its passing CI workflow from the README.
 - Prepared Cargo installation and Linux binary packaging, added SHA-256 release artifacts, and placed push/pull-request validation plus manual/tagged artifact construction in GitHub Actions without enabling publication.
 - Added automatic external-change detection through the supported Beads version-control revision, with quiet selection-preserving list refresh, restrained list execution, and recoverable monitor errors; documented why the ANSI `bd list --watch` display is not used as an adapter.
 - Expanded relationship prefetch into bounded two-worker cache warming, ordered around the current selection and scoped to the visible issue's relationship set.

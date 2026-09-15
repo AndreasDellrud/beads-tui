@@ -33,6 +33,8 @@ The tag-triggered workflow rejects a tag whose name does not match `Cargo.toml`.
 
 ## Publication boundary
 
-The prepared workflow creates temporary GitHub Actions artifacts only. It does not publish to crates.io, create a GitHub Release, push tags, or modify Beads state. Those operations require an explicit owner decision after the repository and release policy exist.
+The prepared workflow creates temporary GitHub Actions artifacts only. It does not publish to crates.io, create a GitHub Release, push tags, or modify Beads state. Those operations require an explicit owner decision after the release policy is accepted.
+
+The public repository protects `main`. Release preparation and ordinary changes must merge through pull requests with passing GitHub Actions rather than direct pushes.
 
 Before closing a release, verify that `btui` restores the alternate screen and mouse-capture state after both normal use and a visible Beads workspace error. Wide and narrow layouts require explicit owner acceptance.
