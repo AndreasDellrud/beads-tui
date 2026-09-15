@@ -31,7 +31,7 @@ Artifacts are written to `dist/` and are not committed.
 6. Open **Actions → Release → Run workflow**, select `main`, enter the version without `v`, and run it.
 7. Verify the resulting tag, generated notes, archive, and checksum from the public Releases page.
 
-The workflow rejects a non-`main` dispatch, a version that differs from `Cargo.toml`, or an existing tag or release. Its write permission is scoped to the release workflow; ordinary CI retains read-only repository permissions.
+The workflow rejects a non-`main` dispatch, a version that differs from `Cargo.toml`, or an existing tag or release. Runs for the same requested version are serialized: a duplicate waits for the active run, then fails the existing tag or release check instead of replacing its assets. Its write permission is scoped to the release workflow; ordinary CI retains read-only repository permissions.
 
 ## Reruns and failures
 
