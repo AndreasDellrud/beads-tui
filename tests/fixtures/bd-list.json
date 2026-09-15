@@ -1,0 +1,28 @@
+[
+  {
+    "id": "btui-1",
+    "title": "Polish the browser",
+    "description": "Make it pleasant.",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "feature",
+    "labels": ["ui"],
+    "dependencies": [
+      {
+        "issue_id": "btui-1",
+        "depends_on_id": "btui-0",
+        "type": "blocks"
+      }
+    ],
+    "dependency_count": 1,
+    "schema_version": 1,
+    "future_optional_field": "ignored safely"
+  },
+  {
+    "id": "btui-2",
+    "title": "Exercise optional defaults",
+    "status": "in_progress",
+    "priority": 1,
+    "issue_type": "task"
+  }
+]

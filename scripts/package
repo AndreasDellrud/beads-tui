@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+target=${1:-$(rustc -vV | sed -n 's/^host: //p')}
+dist_dir=${BTUI_DIST_DIR:-"$project_dir/dist"}
+version=$(cargo pkgid --manifest-path "$project_dir/Cargo.toml" | sed 's/.*#//')
+
+if [[ -z "$target" || -z "$version" ]]; then
+  echo "Could not determine the Rust target or package version." >&2
+  exit 1
+fi
+
+archive_base="btui-${version}-${target}"
+archive_name="${archive_base}.tar.gz"
+staging_root=$(mktemp -d "${TMPDIR:-/tmp}/btui-package.XXXXXX")
+trap 'rm -rf -- "$staging_root"' EXIT
+
+cargo build \
+  --manifest-path "$project_dir/Cargo.toml" \
+  --release \
+  --locked \
+  --target "$target"
+
+mkdir -p "$staging_root/$archive_base" "$dist_dir"
+install -m 0755 "$project_dir/target/$target/release/btui" "$staging_root/$archive_base/btui"
+install -m 0644 "$project_dir/README.md" "$staging_root/$archive_base/README.md"
+install -m 0644 "$project_dir/LICENSE" "$staging_root/$archive_base/LICENSE"
+
+tar -C "$staging_root" -czf "$dist_dir/$archive_name" "$archive_base"
+(
+  cd "$dist_dir"
+  sha256sum "$archive_name" > "${archive_name}.sha256"
+)
+
+printf 'Created %s\n' "$dist_dir/$archive_name"
+printf 'Created %s\n' "$dist_dir/${archive_name}.sha256"
