@@ -842,17 +842,18 @@ impl App {
         let Some(current) = self.detail.as_ref() else {
             return;
         };
-        let Some(preview) = self
+        let preview = self
             .issues
             .iter()
             .find(|issue| issue.id == current.id)
-            .cloned()
-        else {
-            return;
-        };
-        if preview.updated_at != current.updated_at {
-            self.detail_cache.remove(&preview.id);
-            self.request_issue_detail(preview);
+            .cloned();
+        if preview
+            .as_ref()
+            .is_none_or(|preview| preview.updated_at != current.updated_at)
+        {
+            let request = preview.unwrap_or_else(|| current.clone());
+            self.detail_cache.remove(&request.id);
+            self.request_issue_detail(request);
         }
     }
 
@@ -932,7 +933,17 @@ mod tests {
         fn list(&self, options: ListOptions) -> Result<Vec<Issue>> {
             self.list_calls.fetch_add(1, Ordering::SeqCst);
             self.requested.lock().unwrap().push(options);
-            let snapshot = self.issues.lock().unwrap().clone();
+            let snapshot = self
+                .issues
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|issue| match options.view {
+                    ListView::Active | ListView::Ready => issue.status != "closed",
+                    ListView::Closed => issue.status == "closed",
+                })
+                .cloned()
+                .collect();
             thread::sleep(self.delay);
             if self.fail {
                 bail!("simulated bd failure");
@@ -1347,6 +1358,29 @@ mod tests {
         assert_eq!(harness.app.screen, Screen::Issue);
         assert_eq!(harness.app.detail.as_ref().unwrap().updated_at, "v2");
         assert_eq!(harness.app.detail.as_ref().unwrap().comments.len(), 1);
+    }
+
+    #[test]
+    fn list_refresh_revalidates_open_detail_that_disappears_after_close() {
+        let mut harness = test_app(Duration::ZERO, false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        harness.app.open_selected_issue();
+        wait_until(&mut harness.app, |app| !app.loading_detail);
+        let show_calls_before_refresh = harness.show_calls.load(Ordering::SeqCst);
+
+        harness.issues.lock().unwrap()[0].status = "closed".to_owned();
+        harness.app.refresh();
+        wait_until(&mut harness.app, |app| {
+            !app.loading_list && !app.loading_detail
+        });
+
+        assert_eq!(harness.app.screen, Screen::Issue);
+        assert_eq!(harness.app.detail.as_ref().unwrap().id, "btui-1");
+        assert_eq!(harness.app.detail.as_ref().unwrap().status, "closed");
+        assert_eq!(
+            harness.show_calls.load(Ordering::SeqCst),
+            show_calls_before_refresh + 1
+        );
     }
 
     #[test]
