@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">btui Beads task browser</title>
+  <desc id="desc">A stylized preview of btui showing a list of Beads issues, selected task details, and controls for starting a Codex agent.</desc>
+  <defs>
+    <linearGradient id="backdrop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#181825"/>
+      <stop offset="1" stop-color="#11111b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .soft { fill: #7f849c; }
+      .text { fill: #cdd6f4; }
+      .blue { fill: #89b4fa; }
+      .mauve { fill: #cba6f7; }
+      .green { fill: #a6e3a1; }
+      .yellow { fill: #f9e2af; }
+      .peach { fill: #fab387; }
+      .small { font-size: 16px; }
+      .body { font-size: 18px; }
+      .label { font-size: 17px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#backdrop)"/>
+  <circle cx="1128" cy="48" r="210" fill="#cba6f7" opacity="0.055"/>
+  <circle cx="112" cy="610" r="250" fill="#89b4fa" opacity="0.045"/>
+
+  <g filter="url(#shadow)">
+    <rect x="56" y="42" width="1168" height="548" rx="18" fill="#1e1e2e" stroke="#45475a" stroke-width="2"/>
+    <path d="M56 102H1224" stroke="#313244" stroke-width="2"/>
+    <circle cx="88" cy="72" r="7" fill="#f38ba8"/>
+    <circle cx="112" cy="72" r="7" fill="#f9e2af"/>
+    <circle cx="136" cy="72" r="7" fill="#a6e3a1"/>
+    <text x="640" y="79" text-anchor="middle" class="mono soft small">btui · ~/Work/beads-tui</text>
+  </g>
+
+  <g class="mono">
+    <text x="82" y="137" class="mauve" font-size="23" font-weight="800">◈</text>
+    <text x="113" y="137" class="text" font-size="22" font-weight="800" letter-spacing="1">BEADS</text>
+    <text x="202" y="137" class="soft small">task browser</text>
+    <text x="1178" y="137" text-anchor="end" class="blue small">5/12 issues · ready · priority</text>
+    <path d="M80 154H1200" stroke="#313244" stroke-width="2"/>
+
+    <rect x="80" y="174" width="470" height="338" rx="8" fill="#181825" stroke="#45475a" stroke-width="2"/>
+    <rect x="572" y="174" width="628" height="338" rx="8" fill="#181825" stroke="#45475a" stroke-width="2"/>
+    <rect x="102" y="164" width="90" height="24" fill="#1e1e2e"/>
+    <text x="113" y="182" class="mauve label">Issues</text>
+    <rect x="594" y="164" width="104" height="24" fill="#1e1e2e"/>
+    <text x="605" y="182" class="mauve label">Details</text>
+
+    <rect x="94" y="201" width="442" height="43" rx="5" fill="#313244"/>
+    <rect x="94" y="201" width="5" height="43" rx="2" fill="#cba6f7"/>
+    <text x="111" y="228" class="peach label">P1</text>
+    <text x="151" y="228" class="green body">●</text>
+    <text x="177" y="228" class="soft small">btui-142</text>
+    <text x="275" y="228" class="text body" font-weight="700">Add health checks</text>
+
+    <text x="111" y="273" class="yellow label">P2</text>
+    <text x="151" y="273" class="blue body">◆</text>
+    <text x="177" y="273" class="soft small">btui-151</text>
+    <text x="275" y="273" class="text body">Refactor config</text>
+
+    <text x="111" y="316" class="yellow label">P2</text>
+    <text x="151" y="316" class="yellow body">●</text>
+    <text x="177" y="316" class="soft small">btui-166</text>
+    <text x="275" y="316" class="text body">Improve release notes</text>
+
+    <text x="111" y="359" class="soft label">P3</text>
+    <text x="151" y="359" class="green body">●</text>
+    <text x="177" y="359" class="soft small">btui-173</text>
+    <text x="275" y="359" class="text body">Document keybindings</text>
+
+    <text x="111" y="402" class="soft label">P3</text>
+    <text x="151" y="402" class="yellow body">●</text>
+    <text x="177" y="402" class="soft small">btui-188</text>
+    <text x="275" y="402" class="text body">Add theme support</text>
+
+    <text x="599" y="218" class="text" font-size="25" font-weight="800">Add health checks</text>
+    <rect x="599" y="238" width="82" height="28" rx="4" fill="#a6e3a1"/>
+    <text x="640" y="258" text-anchor="middle" fill="#11111b" class="label">ready</text>
+    <text x="697" y="258" class="peach label">P1</text>
+    <text x="735" y="258" class="soft small">task · btui-142</text>
+
+    <text x="599" y="303" class="blue label">Description</text>
+    <text x="599" y="331" class="text body">Expose a lightweight readiness endpoint and surface</text>
+    <text x="599" y="355" class="text body">its state in the operator workflow.</text>
+
+    <text x="599" y="399" class="blue label">Acceptance</text>
+    <text x="599" y="427" class="text body">Health state is observable, tested, and documented.</text>
+
+    <text x="599" y="471" class="blue label">Relationships</text>
+    <text x="599" y="496" class="soft small">1 dependency · 2 dependents · 3 comments</text>
+
+    <rect x="80" y="532" width="1120" height="34" rx="5" fill="#181825"/>
+    <rect x="80" y="532" width="76" height="34" rx="5" fill="#a6e3a1"/>
+    <text x="118" y="555" text-anchor="middle" fill="#11111b" class="label">Work</text>
+    <text x="170" y="555" class="green small">Started Codex for btui-142 in Herdr</text>
+
+    <text x="82" y="581" class="soft small">↑↓/jk navigate   enter details   w start Codex   a/A agent   / filter   r refresh   q quit</text>
+  </g>
+</svg>

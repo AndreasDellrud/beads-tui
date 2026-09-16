@@ -1,49 +1,36 @@
-# beads-tui
+<div align="center">
 
-[![CI](https://github.com/AndreasDellrud/beads-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreasDellrud/beads-tui/actions/workflows/ci.yml)
+# btui
 
-`btui` is a human-friendly terminal browser and work-session launcher for [Beads](https://github.com/gastownhall/beads). It turns the structured output of `bd list` and `bd show` into a fast two-pane view without becoming a second task database or mutating Beads itself.
+### Browse Beads at speed. Start an agent with one key.
 
-The first slice supports issue navigation, detail viewing, active/ready/closed views, useful filtering, sorting, automatic external-change refresh, responsive narrow-terminal layout, and status/priority styling.
+A fast, human-friendly terminal interface for exploring [Beads](https://github.com/gastownhall/beads) issues and turning ready work into isolated agent sessions.
 
-## Prerequisites
+[![Release](https://img.shields.io/github/v/release/AndreasDellrud/beads-tui?style=flat-square&color=a6e3a1)](https://github.com/AndreasDellrud/beads-tui/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/AndreasDellrud/beads-tui/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/AndreasDellrud/beads-tui/actions/workflows/ci.yml)
+[![Rust 1.88+](https://img.shields.io/badge/rust-1.88%2B-fab387?style=flat-square&logo=rust)](https://www.rust-lang.org/)
+[![MIT](https://img.shields.io/badge/license-MIT-89b4fa?style=flat-square)](LICENSE)
 
-- Rust 1.88 or newer
-- `bd` on `PATH`
-- an active Beads workspace in the current directory or one of its parents
-- `codex` and/or `claude` on `PATH` to start implementation sessions
-- optionally, [Herdr](https://herdr.dev) for managed agent worktrees
+<img src="docs/assets/btui-preview.svg" alt="btui browsing a selected Beads task with issue details and agent controls" width="100%">
 
-## Run
+</div>
 
-```bash
-cargo run --release
-```
+## Why btui?
 
-Keys: `↑`/`↓` or `j`/`k` navigate; `Enter` opens the dedicated issue screen; `1`, `2`, and `3` switch active, ready, and closed views; `s` cycles priority, updated, and created sorting; `/` filters; `x` clears the filter; `w` starts work with the active agent; `a`/`A` shift forward/backward through installed agents; `r` refreshes in the background; and `q` quits. The mouse wheel scrolls whichever pane is under the pointer without changing the selected issue. `Page Up` and `Page Down` scroll the browser preview. In the issue screen, `↑`/`↓`, `j`/`k`, and page keys scroll the bounded issue body; `Tab`/`Shift-Tab` select relationships, `Enter` follows one, and `Esc` or `Backspace` returns to the browser. The active agent remains visible in both screens' footer.
+| | |
+|---|---|
+| **Instant browsing** | Navigate pre-rendered issue summaries without waiting for `bd show` on every selection. |
+| **Complete context** | Open descriptions, acceptance criteria, comments, dependencies, and dependents in a dedicated issue screen. |
+| **Agent-ready work** | Press `w` to start the selected bead with Codex or Claude Code using Beads as the canonical task source. |
+| **Safe isolation** | Inside [Herdr](https://herdr.dev), every managed session gets its own branch-backed Git worktree. |
 
-`w` passes only the task ID and repository path to a shared prompt that tells the selected agent to read `AGENTS.md`, retrieve the canonical Beads task and relationships, confirm readiness, claim it, create a focused branch, implement it, validate it, and update Beads. Closed, blocked, and deferred tasks are rejected before launch. When `btui` is running inside Herdr, the action creates a branch-backed worktree workspace, starts the selected Codex or Claude Code agent there, and focuses it, so its branch cannot replace the branch under the TUI. If an agent requires startup confirmation, `btui` focuses that screen and continues the original launch after approval; it never bypasses trust. Elsewhere it temporarily restores the terminal, runs the selected interactive agent in the foreground, then restores `btui` and refreshes Beads when the agent exits. `Shift-W` always requests the foreground path and is the explicit retry when managed launch fails.
-
-The installed-agent order is Codex then Claude Code. The active selection is saved immediately in `$XDG_CONFIG_HOME/btui/config.toml`, or `~/.config/btui/config.toml` when `XDG_CONFIG_HOME` is unset. A missing, malformed, or unavailable saved choice falls back deterministically to the first installed supported agent and reports the fallback. This selection is owned by `btui`; it does not depend on Omarchy or a desktop-level default-agent setting.
-
-Executable detection does not imply that an agent is authenticated. A first-run login or trust screen stays visible in the preserved foreground or Herdr session for the user to complete. Managed prompt submission waits briefly for observed activity; if the agent remains at setup instead of beginning work, btui reports the launch problem without deleting that session.
-
-Launch feedback appears on a dedicated status row, leaving the keybinding footer visible. A successful launch message clears on the next keypress or mouse-wheel scroll. Launch errors remain available for inspection and retry until dismissed with `Esc`.
-
-While it is open, `btui` checks Beads' supported version-control revision in a background worker. A changed revision triggers one quiet list refresh, so changes made by another shell or agent appear without repeatedly running the heavier list command. If revision detection fails, the status line reports that automatic refresh is paused; manual `r` refresh remains available while later checks retry automatically.
+`btui` stays deliberately small: it invokes the installed `bd` CLI with `--readonly`, consumes supported JSON output, and never becomes a second task database.
 
 ## Install
 
-Install from a source checkout with Cargo:
+### Prebuilt Linux binary
 
-```bash
-cargo install --path . --locked
-btui
-```
-
-This installs the `btui` executable into Cargo's binary directory, normally `~/.cargo/bin`. Remove it with `cargo uninstall beads-tui`.
-
-The manually dispatched **Release** GitHub Actions workflow creates a matching version tag and GitHub Release with generated notes, a Linux x86-64 archive, and its SHA-256 checksum. Published versions are available from the [GitHub releases page](https://github.com/AndreasDellrud/beads-tui/releases). After downloading an archive and checksum:
+Download the archive and checksum for the current version from [GitHub Releases](https://github.com/AndreasDellrud/beads-tui/releases/latest), then:
 
 ```bash
 sha256sum --check btui-*.tar.gz.sha256
@@ -51,14 +38,93 @@ tar -xzf btui-*.tar.gz
 install -Dm755 btui-*/btui ~/.local/bin/btui
 ```
 
-## Validate
+### From source
+
+Requires Rust 1.88 or newer:
+
+```bash
+git clone https://github.com/AndreasDellrud/beads-tui.git
+cd beads-tui
+cargo install --path . --locked
+```
+
+## Quick start
+
+Run `btui` from any directory where `bd` can discover a Beads workspace:
+
+```bash
+cd your-beads-project
+btui
+```
+
+You only need `bd` on `PATH` to browse. Starting work sessions additionally requires at least one supported agent executable:
+
+- [Codex](https://developers.openai.com/codex/cli/) via `codex`
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) via `claude`
+- optionally, [Herdr](https://herdr.dev) for isolated managed worktrees
+
+## Controls
+
+| Key | Action |
+|---|---|
+| `↑` / `↓`, `j` / `k` | Navigate issues or scroll the current detail view |
+| `Enter` | Open an issue or follow the selected relationship |
+| `Tab` / `Shift-Tab` | Select relationships in the issue screen |
+| `1` / `2` / `3` | Show active, ready, or closed issues |
+| `s` | Cycle priority, updated, and created sorting |
+| `/` / `x` | Filter issues / clear the filter |
+| `w` / `W` | Start work / force a foreground agent session |
+| `a` / `A` | Select the next / previous installed agent |
+| `r` | Refresh in the background |
+| `Esc` / `Backspace` | Dismiss an error or return to the browser |
+| `q` | Quit |
+
+The mouse wheel scrolls the pane beneath the pointer. `Page Up` and `Page Down` move through longer previews and issue bodies without changing the selected issue.
+
+## From bead to work session
+
+```text
+select a ready bead ── w ──> validate eligibility ──> launch selected agent
+                                                   ├─ Herdr: isolated worktree
+                                                   └─ terminal: foreground handoff
+```
+
+The agent receives the bead ID—not a copied task description—and is instructed to:
+
+1. Read `AGENTS.md` and repository instructions.
+2. Retrieve the canonical task, dependencies, comments, and acceptance criteria from Beads.
+3. Stop if the task is blocked; otherwise claim it and create a focused branch.
+4. Implement, validate, and update Beads as appropriate.
+
+Closed, blocked, and deferred beads are rejected before launch. Foreground sessions temporarily release the terminal and restore `btui` when the agent exits. Herdr sessions preserve live login, trust, confirmation, timeout, and focus failures for inspection instead of silently deleting useful state.
+
+The active agent is visible in the footer and saved to `$XDG_CONFIG_HOME/btui/config.toml`, falling back to `~/.config/btui/config.toml`. Executable detection does not imply authentication; first-run setup remains an explicit decision in the launched agent.
+
+## Designed for responsive browsing
+
+- Browser previews render directly from `bd list` data.
+- Extended issue details load in the background and are cached by identity and freshness.
+- Nearby relationships warm concurrently so following one often feels immediate.
+- Independent, bounded viewports keep long lists and issue bodies under control.
+- A lightweight Beads revision check refreshes external changes without repeatedly running the heavier list command.
+- Wide terminals use side-by-side panes; narrow terminals stack them automatically.
+
+## Project boundaries
+
+`btui` does not create, edit, claim, close, or synchronize Beads issues itself. Any mutation happens later inside the visible agent session. It does not read Dolt internals or `.beads/issues.jsonl`, and it has no Omarchy dependency.
+
+The installed `bd` executable and its JSON output are authoritative. Agent process control stays behind an executor-neutral task-to-session boundary so additional adapters can be added without rewriting selection or lifecycle policy.
+
+## Development
 
 ```bash
 ./scripts/validate
 ```
 
-The application always invokes `bd` itself with `--readonly`. Beads remains the source of truth; this project does not read Dolt internals or `.beads/issues.jsonl`. Any task mutation happens later inside the user-visible agent session, not as a partial side effect of pressing `w`.
+The validation script runs formatting checks, Clippy with warnings denied, and the test suite. GitHub Actions runs the same boundary on pushes and pull requests. Release construction and publication are documented in [docs/releasing.md](docs/releasing.md).
 
-GitHub Actions runs the same validation script on pushes and pull requests. Release preparation and the intentionally manual publication flow are documented in [docs/releasing.md](docs/releasing.md).
+For deeper context, see the [product boundaries](docs/product.md), [architecture](docs/architecture.md), and [project knowledge index](docs/index.md). Live work is tracked only in Beads (`bd ready`, `bd list`).
 
-Project intent and boundaries are maintained in [docs/product.md](docs/product.md) and [docs/architecture.md](docs/architecture.md). Live work is tracked only in Beads (`bd ready`, `bd list`).
+## License
+
+[MIT](LICENSE) © Andreas Dellrud
