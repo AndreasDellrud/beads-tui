@@ -17,7 +17,6 @@ A fast, human-friendly terminal interface for exploring [Beads](https://github.c
 
 ## Why btui?
 
-| | |
 |---|---|
 | **Instant browsing** | Navigate pre-rendered issue summaries without waiting for `bd show` on every selection. |
 | **Complete context** | Open descriptions, acceptance criteria, comments, dependencies, and dependents in a dedicated issue screen. |
@@ -111,7 +110,7 @@ The active agent is visible in the footer and saved to `$XDG_CONFIG_HOME/btui/co
 
 ## Project boundaries
 
-`btui` does not create, edit, claim, close, or synchronize Beads issues itself. Any mutation happens later inside the visible agent session. It does not read Dolt internals or `.beads/issues.jsonl`, and it has no Omarchy dependency.
+`btui` does not create, edit, claim, close, or synchronize Beads issues itself. Any mutation happens later inside the visible agent session. It does not read Dolt internals or `.beads/issues.jsonl`.
 
 The installed `bd` executable and its JSON output are authoritative. Agent process control stays behind an executor-neutral task-to-session boundary so additional adapters can be added without rewriting selection or lifecycle policy.
 
