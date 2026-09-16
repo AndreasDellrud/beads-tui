@@ -2,6 +2,7 @@
 
 ## 2026-09-16
 
+- Reworked the public README around a visual product preview, benefits, quick installation, scannable controls, the bead-to-agent flow, and explicit safety boundaries; added matching GitHub repository presentation metadata.
 - Added a btui-owned Codex/Claude Code selector with installed-executable detection, XDG persistence, visible `a`/`A` shifting, executor-neutral prompts, and generic foreground/Herdr launch adapters without an Omarchy dependency.
 - Changed managed launches from Codex-specific tabs to branch-backed Herdr worktree workspaces so every supported executor receives the same checkout-isolation guarantee.
 
