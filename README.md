@@ -17,6 +17,7 @@ A fast, human-friendly terminal interface for exploring [Beads](https://github.c
 
 ## Why btui?
 
+| | |
 |---|---|
 | **Instant browsing** | Navigate pre-rendered issue summaries without waiting for `bd show` on every selection. |
 | **Complete context** | Open descriptions, acceptance criteria, comments, dependencies, and dependents in a dedicated issue screen. |
