@@ -79,6 +79,8 @@ You only need `bd` on `PATH` to browse. Starting work sessions additionally requ
 | `Esc` / `Backspace` | Dismiss an error or return to the browser |
 | `q` | Quit |
 
+Click an issue or relationship to select it; double-click the same row to open it. Click a visible footer control to run its keyboard action (the agent control cycles forward). Blank space, borders, and clipped controls do nothing.
+
 The mouse wheel scrolls the pane beneath the pointer. `Page Up` and `Page Down` move through longer previews and issue bodies without changing the selected issue.
 
 ## From bead to work session

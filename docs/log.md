@@ -1,5 +1,9 @@
 # Documentation log
 
+## 2026-09-24
+
+- Added issue and relationship click selection, double-click opening, and clickable footer actions with scroll-aware hit testing for wide and stacked layouts.
+
 ## 2026-09-16
 
 - Reworked the public README around a visual product preview, benefits, quick installation, scannable controls, the bead-to-agent flow, and explicit safety boundaries; added matching GitHub repository presentation metadata.

@@ -1,5 +1,6 @@
 use ratatui::{
     Frame,
+    crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
@@ -534,24 +535,119 @@ fn draw_keybindings(frame: &mut Frame, area: Rect, line: Line<'static>) {
     frame.render_widget(Paragraph::new(line), area);
 }
 
-fn browser_keybindings(agent: Option<AgentKind>) -> Line<'static> {
+// Labels are shared by rendering and hit testing, including Unicode cell widths.
+fn controls(screen: Screen, agent: Option<AgentKind>) -> Vec<(String, KeyCode)> {
     let agent = agent.map_or("no agent", AgentKind::display_name);
-    Line::styled(
-        format!(
-            " ↑↓/jk navigate   enter details   w start {agent}   a/A agent   1/2/3 views   s sort   / filter   r refresh   q quit "
-        ),
-        Style::default().fg(MUTED),
-    )
+    let mut controls = match screen {
+        Screen::Browser => vec![
+            ("enter details".into(), KeyCode::Enter),
+            ("1 active".into(), KeyCode::Char('1')),
+            ("2 ready".into(), KeyCode::Char('2')),
+            ("3 closed".into(), KeyCode::Char('3')),
+            ("s sort".into(), KeyCode::Char('s')),
+            ("/ filter".into(), KeyCode::Char('/')),
+            ("x clear".into(), KeyCode::Char('x')),
+        ],
+        Screen::Issue => vec![
+            ("esc back".into(), KeyCode::Esc),
+            ("enter follow".into(), KeyCode::Enter),
+            ("tab next".into(), KeyCode::Tab),
+            ("shift-tab previous".into(), KeyCode::BackTab),
+        ],
+    };
+    controls.extend([
+        (format!("w start {agent}"), KeyCode::Char('w')),
+        ("a/A agent".into(), KeyCode::Char('a')),
+        ("r refresh".into(), KeyCode::Char('r')),
+        ("q quit".into(), KeyCode::Char('q')),
+    ]);
+    controls
+}
+
+fn keybindings(screen: Screen, agent: Option<AgentKind>) -> Line<'static> {
+    let mut spans = vec![Span::raw(" ")];
+    for (index, (label, _)) in controls(screen, agent).into_iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::raw("   "));
+        }
+        spans.push(Span::raw(label));
+    }
+    Line::from(spans).style(Style::default().fg(MUTED))
+}
+
+fn browser_keybindings(agent: Option<AgentKind>) -> Line<'static> {
+    keybindings(Screen::Browser, agent)
 }
 
 fn issue_keybindings(agent: Option<AgentKind>) -> Line<'static> {
-    let agent = agent.map_or("no agent", AgentKind::display_name);
-    Line::styled(
-        format!(
-            " wheel/↑↓/jk scroll   tab/shift-tab relationships   enter follow   w start {agent}   a/A agent   r reload   esc back "
+    keybindings(Screen::Issue, agent)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClickTarget {
+    Issue(usize),
+    Relationship(usize),
+    Key(KeyCode),
+}
+
+pub fn click_target(
+    area: Rect,
+    app: &App,
+    agent: Option<AgentKind>,
+    column: u16,
+    row: u16,
+) -> Option<ClickTarget> {
+    let page = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Min(8),
+        Constraint::Length(2),
+    ])
+    .split(area);
+    let position = Position::new(column, row);
+    let (_, footer) = footer_areas(page[2]);
+    if footer.contains(position) {
+        let mut x = footer.x.saturating_add(1);
+        for (label, key) in controls(app.screen, agent) {
+            let width = Span::raw(label).width() as u16;
+            let end = x.saturating_add(width);
+            // A clipped control must not activate a partially hidden action.
+            if end <= footer.right() && column >= x && column < end {
+                return Some(ClickTarget::Key(key));
+            }
+            x = end.saturating_add(3);
+        }
+        return None;
+    }
+    let (pane, offset, count, height) = match app.screen {
+        Screen::Browser => (
+            browser_panes(page[1]).0,
+            app.list_scroll,
+            app.visible.len(),
+            1,
         ),
-        Style::default().fg(MUTED),
-    )
+        Screen::Issue => (
+            issue_panes(page[1]).1,
+            app.relationship_scroll,
+            app.relationships().len(),
+            2,
+        ),
+    };
+    let inner = panel(String::new()).inner(pane);
+    if !inner.contains(position) {
+        return None;
+    }
+    let visible_row = (row - inner.y) / height;
+    if visible_row >= inner.height / height {
+        return None;
+    }
+    let index = offset + usize::from(visible_row);
+    if index >= count {
+        return None;
+    }
+    Some(match app.screen {
+        Screen::Browser => ClickTarget::Issue(index),
+        Screen::Issue => ClickTarget::Relationship(index),
+    })
 }
 
 fn panel(title: String) -> Block<'static> {
