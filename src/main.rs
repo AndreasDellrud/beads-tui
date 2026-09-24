@@ -12,7 +12,7 @@ use ratatui::{
     crossterm::{
         event::{
             self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
-            MouseEventKind,
+            MouseButton, MouseEventKind,
         },
         execute,
     },
@@ -41,6 +41,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
     }
     let launcher = WorkLauncher::default();
 
+    let mut last_click: Option<(String, u16, u16, Instant)> = None;
     loop {
         app.poll();
         app.tick(Instant::now());
@@ -51,39 +52,109 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
         }
 
         let input = event::read()?;
-        if let Event::Mouse(mouse) = input {
-            let delta: i16 = match mouse.kind {
-                MouseEventKind::ScrollDown => 3,
-                MouseEventKind::ScrollUp => -3,
-                _ => continue,
-            };
-            app.clear_work_success();
-            let size = terminal.size()?;
-            let area = Rect::new(0, 0, size.width, size.height);
-            if let Some(pane) = ui::scroll_target(area, app.screen, mouse.column, mouse.row) {
-                let delta = if pane == ScrollPane::Relationships {
-                    delta.signum()
-                } else {
-                    delta
-                };
-                app.scroll(pane, delta);
+        let (code, from_mouse) = match input {
+            Event::Mouse(mouse) => {
+                let size = terminal.size()?;
+                let area = Rect::new(0, 0, size.width, size.height);
+                match mouse.kind {
+                    MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
+                        last_click = None;
+                        app.clear_work_success();
+                        if let Some(pane) =
+                            ui::scroll_target(area, app.screen, mouse.column, mouse.row)
+                        {
+                            let step = if pane == ScrollPane::Relationships {
+                                1
+                            } else {
+                                3
+                            };
+                            app.scroll(
+                                pane,
+                                if mouse.kind == MouseEventKind::ScrollUp {
+                                    -step
+                                } else {
+                                    step
+                                },
+                            );
+                        }
+                        continue;
+                    }
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        let target = ui::click_target(
+                            area,
+                            &app,
+                            agents.selected(),
+                            mouse.column,
+                            mouse.row,
+                        );
+                        let identity = match &target {
+                            Some(ui::ClickTarget::Issue(index)) => {
+                                Some(format!("list:{}", app.issues[app.visible[*index]].id))
+                            }
+                            Some(ui::ClickTarget::Relationship(index)) => Some(format!(
+                                "related:{}:{}",
+                                app.detail.as_ref().map_or("", |issue| issue.id.as_str()),
+                                app.relationships()[*index].1.id
+                            )),
+                            _ => None,
+                        };
+                        let now = Instant::now();
+                        let double = identity.as_ref().is_some_and(|id| {
+                            last_click
+                                .as_ref()
+                                .is_some_and(|(previous, column, row, at)| {
+                                    previous == id
+                                        && *column == mouse.column
+                                        && *row == mouse.row
+                                        && now.duration_since(*at) <= Duration::from_millis(400)
+                                })
+                        });
+                        last_click = if double {
+                            None
+                        } else {
+                            identity.map(|id| (id, mouse.column, mouse.row, now))
+                        };
+                        match target {
+                            Some(ui::ClickTarget::Issue(index)) => {
+                                app.clear_work_success();
+                                app.select_issue_at(index);
+                                if double {
+                                    app.open_selected_issue();
+                                }
+                                continue;
+                            }
+                            Some(ui::ClickTarget::Relationship(index)) => {
+                                app.clear_work_success();
+                                app.select_relationship_at(index);
+                                if double {
+                                    app.open_selected_relationship();
+                                }
+                                continue;
+                            }
+                            Some(ui::ClickTarget::Key(key)) => (key, true),
+                            None => continue,
+                        }
+                    }
+                    _ => continue,
+                }
             }
-            continue;
-        }
-
-        let Event::Key(key) = input else {
-            continue;
+            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                last_click = None;
+                (key.code, false)
+            }
+            Event::Resize(_, _) => {
+                last_click = None;
+                continue;
+            }
+            _ => continue,
         };
-        if key.kind != KeyEventKind::Press {
-            continue;
-        }
         app.clear_work_success();
-        if key.code == KeyCode::Esc && app.dismiss_work_error() {
+        if code == KeyCode::Esc && app.dismiss_work_error() {
             continue;
         }
 
         if app.screen == Screen::Issue {
-            match key.code {
+            match code {
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Esc | KeyCode::Backspace => app.close_issue(),
                 KeyCode::Down | KeyCode::Char('j') => app.scroll(ScrollPane::IssueBody, 2),
@@ -107,8 +178,11 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
             continue;
         }
 
+        if from_mouse {
+            app.filtering = false;
+        }
         if app.filtering {
-            match key.code {
+            match code {
                 KeyCode::Esc | KeyCode::Enter => app.filtering = false,
                 KeyCode::Backspace => app.pop_filter(),
                 KeyCode::Char(character) => app.push_filter(character),
@@ -117,7 +191,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
             continue;
         }
 
-        match key.code {
+        match code {
             KeyCode::Char('q') => return Ok(()),
             KeyCode::Char('/') => app.filtering = true,
             KeyCode::Char('r') => app.refresh(),

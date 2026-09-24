@@ -17,6 +17,8 @@ The initial experience is a read-only task browser:
 - remain useful in both wide and narrow terminals
 - keep selection independent from pane scrolling, with bounded overflow in lists, previews, issue bodies, and relationships
 
+Mouse navigation complements the keyboard: a single click selects an issue or relationship, a double click opens it, and visible footer controls invoke the same actions as their keys. Wheel scrolling remains independent of selection.
+
 The interaction should feel keyboard-native and visually deliberate, not like command output placed inside a border.
 
 ## Deliberate exclusions

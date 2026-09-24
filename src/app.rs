@@ -534,6 +534,23 @@ impl App {
         self.refresh();
     }
 
+    pub fn select_issue_at(&mut self, index: usize) {
+        if index < self.visible.len() {
+            self.filtering = false;
+            self.list_state.select(Some(index));
+            self.ensure_selected_issue_visible();
+            self.select_detail();
+        }
+    }
+
+    pub fn select_relationship_at(&mut self, index: usize) {
+        if index < self.relationships().len() {
+            self.relationship_index = index;
+            self.ensure_selected_relationship_visible();
+            self.prioritize_selected_relationship();
+        }
+    }
+
     pub fn select_next(&mut self) {
         if self.visible.is_empty() {
             return;
@@ -1087,6 +1104,87 @@ mod tests {
             assert!(Instant::now() < deadline, "timed out waiting for loader");
             app.poll();
             thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    #[test]
+    fn clicks_match_rendered_rows_controls_and_scrolled_relationships() {
+        use crate::ui::{self, ClickTarget};
+        use ratatui::{Terminal, backend::TestBackend, crossterm::event::KeyCode};
+
+        let mut harness = test_app(Duration::ZERO, false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        let app = &mut harness.app;
+        // Verify hit testing against actual rendered text at both layout widths.
+        for width in [70, 160] {
+            let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
+            terminal.draw(|frame| ui::draw(frame, app, None)).unwrap();
+            let area = terminal.backend().buffer().area;
+            let hit = |x, y| ui::click_target(area, app, None, x, y);
+            assert_eq!(hit(2, 4), Some(ClickTarget::Issue(0)));
+            assert_eq!(hit(2, 5), Some(ClickTarget::Issue(1)));
+            assert_eq!(hit(2, 6), None); // blank list row
+            assert_eq!(hit(0, 4), None); // border
+            assert_eq!(hit(1, 4), None); // padding
+            assert_eq!(hit(2, 3), None); // title
+            assert_eq!(hit(2, 1), None); // header
+            assert_eq!(hit(1, 29), Some(ClickTarget::Key(KeyCode::Enter)));
+            assert_eq!(terminal.backend().buffer()[(1, 29)].symbol(), "e");
+            assert_eq!(hit(14, 29), None); // gap between controls
+            assert_eq!(hit(width, 29), None);
+            if width == 70 {
+                assert_eq!(hit(69, 29), None); // clipped x clear control
+            }
+        }
+        app.filtering = true;
+        app.select_issue_at(1);
+        assert_eq!(app.detail.as_ref().unwrap().id, "btui-2");
+        assert!(!app.filtering);
+        app.select_issue_at(99);
+        assert_eq!(app.list_state.selected(), Some(1));
+        app.update_list_viewport(1);
+        let area = ratatui::layout::Rect::new(0, 0, 160, 30);
+        assert_eq!(
+            ui::click_target(area, app, None, 2, 4),
+            Some(ClickTarget::Issue(1))
+        );
+        app.open_selected_issue();
+        wait_until(app, |app| !app.loading_detail);
+        app.detail.as_mut().unwrap().dependencies = (0..20)
+            .map(|index| RelatedIssue {
+                id: format!("related-{index}"),
+                title: format!("Related {index}"),
+                status: "open".into(),
+                priority: 2,
+                issue_type: "task".into(),
+                dependency_type: "blocks".into(),
+            })
+            .collect();
+        for width in [70, 160] {
+            let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
+            terminal.draw(|frame| ui::draw(frame, app, None)).unwrap();
+            app.scroll(ScrollPane::Relationships, 3);
+            terminal.draw(|frame| ui::draw(frame, app, None)).unwrap();
+            let buffer = terminal.backend().buffer();
+            let mut rows = Vec::new();
+            for y in 0..30 {
+                for x in 0..width {
+                    if ui::click_target(buffer.area, app, None, x, y)
+                        == Some(ClickTarget::Relationship(app.relationship_scroll))
+                    {
+                        rows.push((x, y));
+                        break;
+                    }
+                }
+            }
+            assert_eq!(rows.len(), 2);
+            assert_eq!(buffer[rows[0]].symbol(), "d"); // depends on
+            assert_eq!(buffer[rows[1]].symbol(), "r"); // related ID
+            app.select_relationship_at(app.relationship_scroll);
+            assert_eq!(app.relationship_index, app.relationship_scroll);
+            let selected = app.relationship_index;
+            app.select_relationship_at(999);
+            assert_eq!(app.relationship_index, selected);
         }
     }
 

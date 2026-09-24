@@ -4,6 +4,12 @@ All notable changes to `btui` are recorded here.
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-24
+
+- Select issues and relationships with a click, and open them with a double click.
+- Click visible footer controls to invoke their keyboard actions.
+- Match mouse targets to scrolled content in wide and stacked layouts, ignoring borders, blank rows, and clipped controls.
+
 ## 0.2.0 - 2026-09-16
 
 - Start a focused implementation session with the selected Codex or Claude Code executor.
