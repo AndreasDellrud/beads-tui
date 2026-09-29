@@ -4,6 +4,13 @@ All notable changes to `btui` are recorded here.
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-29
+
+- Qualify the read-only CLI adapter against Beads 1.2.2 and 1.3.0, including linked workspaces.
+- Refresh from optional Beads 1.3 event notifications while retaining revision polling and 30-second reconciliation for unjournaled writes. Journal enablement remains an explicit workspace-owner choice.
+- Reload open details and invalidate prefetched data after external changes, preserving issue and relationship selection even when timestamps do not change.
+- Recover from event-feed failures with visible status and polling fallback; stop and reap the watcher during foreground agent handoff and on exit.
+
 ## 0.3.0 - 2026-09-24
 
 - Select issues and relationships with a click, and open them with a double click.

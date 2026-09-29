@@ -1,0 +1,12 @@
+{
+  "args": [
+    "--readonly",
+    "list",
+    "--json",
+    "--limit",
+    "0"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "Error: failed to open database: schema version mismatch: database is at v53, binary expects v66, and the read-only open cannot migrate it; run any bd write command in that workspace to migrate, or set BD_IGNORE_SCHEMA_SKEW=1 to read anyway (queries touching newer schema may fail)\n"
+}

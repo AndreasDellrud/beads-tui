@@ -1,5 +1,17 @@
 # Documentation log
 
+## 2026-09-29
+
+- Passed owner-delegated final 0.4.0 terminal acceptance at 140×34 and 80×24, including resize/navigation and terminal/mouse restoration after normal and missing-workspace-error exits.
+
+- Prepared the 0.4.0 event-assisted refresh release and recorded owner verification of journaled and unjournaled title updates with an unchanged version-control revision. Direct event deltas, broader backend/performance qualification and JSON envelopes remain Beads follow-up work.
+
+- Implemented optional readonly event invalidation with polling fallback, bounded stream handling, child cleanup, periodic reconciliation and generation-safe detail invalidation. Recorded verified live 1.3.0 migration; journal enablement and selective replay remain separate.
+
+- Began Beads 1.3 compatibility implementation with a disposable-workspace qualification harness and captured 1.2.2/1.3.0 CLI regression contracts; recorded embedded results and explicit remaining qualification boundaries.
+
+- Assessed upstream issue #6 against pinned Beads v1.3.0 contracts and current btui code; recorded a staged CLI-first migration design with legacy fallback, event reconciliation, cache consistency, and deferred HTTP. Implementation remains tracked in Beads.
+
 ## 2026-09-24
 
 - Added issue and relationship click selection, double-click opening, and clickable footer actions with scroll-aware hit testing for wide and stacked layouts.

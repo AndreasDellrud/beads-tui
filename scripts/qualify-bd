@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Capture btui CLI contracts in a fresh disposable embedded workspace.
+
+Usage: scripts/qualify-bd /absolute/path/to/bd 1.3.0 /new/output.json
+Does not install binaries, migrate existing workspaces, or sync any remote.
+"""
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+
+def main():
+    binary = Path(sys.argv[1]).resolve(strict=True)
+    version = sys.argv[2]
+    destination = Path(sys.argv[3]).resolve()
+    if version not in ("1.2.2", "1.3.0"):
+        raise ValueError("expected a qualified version: 1.2.2 or 1.3.0")
+    if destination.exists():
+        raise ValueError("output already exists; choose a new capture path")
+    with tempfile.TemporaryDirectory(prefix="btui-bd-contract-") as directory:
+        workspace = Path(directory)
+        # Prevent caller workspace redirects, global settings and Git hooks from
+        # making this qualification touch the real checkout or database.
+        env = {k: v for k, v in os.environ.items()
+               if not k.startswith(("BD_", "BEADS_", "DOLT_", "GIT_"))}
+        home = workspace / "home"
+        home.mkdir()
+        env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / "config"),
+                   BD_ACTOR="fixture", GIT_CONFIG_NOSYSTEM="1")
+
+        def command(args, cwd=workspace, check=True):
+            result = subprocess.run(args, cwd=cwd, env=env, capture_output=True,
+                                    text=True, timeout=60)
+            if check and result.returncode:
+                raise RuntimeError(f"{args}: {result.stdout}\n{result.stderr}")
+            return result
+
+        stamp = command([str(binary), "--version"]).stdout.strip()
+        if not stamp.startswith(f"bd version {version} ("):
+            raise ValueError(f"unexpected binary: {stamp}")
+        command(["git", "init", "-q", "-b", "main"])
+        command(["git", "config", "user.name", "Fixture"])
+        command(["git", "config", "user.email", "fixture@example.test"])
+
+        def bd(*args, **kwargs):
+            return command([str(binary), *args], **kwargs)
+
+        bd("init", "--prefix", "compat", "--non-interactive")
+        for key in ("ready", "blocked", "closed", "child"):
+            bd("create", "--id", f"compat-{key}", "--title", key, "--type", "task",
+               "--description", "Compatibility fixture", "--json")
+        bd("dep", "add", "compat-blocked", "compat-ready")
+        bd("dep", "add", "compat-child", "compat-blocked")
+        bd("comments", "add", "compat-blocked", "A fixture comment")
+        bd("close", "compat-closed")
+        captures = []
+
+        def capture(name, args, cwd=workspace):
+            result = bd("--readonly", *args, cwd=cwd, check=False)
+            entry = dict(name=name, args=["--readonly", *args],
+                         success=result.returncode == 0, exit_code=result.returncode,
+                         stdout=result.stdout, stderr=result.stderr)
+            captures.append(entry)
+            return entry
+
+        for view, flags, expected in (
+            ("active", ["--status", "open,in_progress,blocked"],
+             {"compat-ready", "compat-blocked", "compat-child"}),
+            ("ready", ["--ready"], {"compat-ready"}),
+            ("closed", ["--status", "closed"], {"compat-closed"}),
+        ):
+            for sort in ("priority", "updated", "created"):
+                args = ["list", "--json", "--limit", "0", *flags, "--sort", sort]
+                if sort != "priority":
+                    args.append("--reverse")
+                entry = capture(f"{view}-{sort}", args)
+                assert entry["success"], entry
+                assert {x["id"] for x in json.loads(entry["stdout"])} == expected
+        show_args = ["show", "--id=compat-blocked", "--json",
+                     "--include-comments", "--include-dependents"]
+        detail = capture("show", show_args)
+        assert detail["success"], detail
+        issue = json.loads(detail["stdout"])[0]
+        assert issue["dependencies"][0]["id"] == "compat-ready"
+        assert issue["dependents"][0]["id"] == "compat-child"
+        assert issue["comments"][0]["text"] == "A fixture comment"
+        nested = workspace / "nested"
+        nested.mkdir()
+        entry = capture("nested-show", show_args, cwd=nested)
+        assert entry["success"] and json.loads(entry["stdout"]) == [issue]
+        linked = workspace / "linked"
+        command(["git", "worktree", "add", "--orphan", "-b", "linked", str(linked)])
+        entry = capture("worktree-show", show_args, cwd=linked)
+        assert entry["success"] and json.loads(entry["stdout"]) == [issue]
+        assert capture("revision", ["vc", "status", "--json"])["success"]
+        assert not capture("missing", ["show", "--id=compat-missing", "--json"])["success"]
+        event_args = ["events", "tail", "--since", "0", "--json"]
+        disabled = capture("events-disabled", event_args)
+        if version == "1.3.0":
+            assert disabled["success"] and "journal is disabled" in disabled["stderr"]
+            bd("config", "set", "events-journal", "true")
+            bd("update", "compat-ready", "--title", "Ready changed")
+            events = capture("events-enabled", event_args)
+            assert events["success"]
+            assert json.loads(events["stdout"].splitlines()[-1])["issue_id"] == "compat-ready"
+        else:
+            assert not disabled["success"] and 'unknown command "events"' in disabled["stderr"]
+        result = dict(version=stamp, binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+                      backend="embedded", captures=captures)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("x") as output:
+            json.dump(result, output, indent=2)
+            output.write("\n")
+        print(f"Qualified {stamp}; captured {len(captures)} commands in {destination}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        sys.exit(__doc__)
+    main()

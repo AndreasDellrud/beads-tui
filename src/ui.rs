@@ -154,6 +154,13 @@ fn draw_issue_screen(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>)
             format!(" error · {error} · r retry "),
             Style::default().fg(RED),
         )
+    } else if let Some(error) = &app.auto_refresh_error {
+        Line::styled(
+            format!(" Auto-refresh: {error} · r still refreshes "),
+            Style::default().fg(RED),
+        )
+    } else if let Some(error) = &app.event_refresh_error {
+        event_status_line(error)
     } else {
         Line::default()
     };
@@ -469,6 +476,13 @@ fn launch_status_line(message: Option<&str>, error: Option<&str>) -> Option<Line
     }
 }
 
+fn event_status_line(error: &str) -> Line<'static> {
+    Line::styled(
+        format!(" Event feed: {error} · periodic refresh continues "),
+        Style::default().fg(RED),
+    )
+}
+
 fn draw_browser_status(frame: &mut Frame, area: Rect, app: &App) {
     let line = if let Some(status) =
         launch_status_line(app.work_message.as_deref(), app.work_error.as_deref())
@@ -499,6 +513,8 @@ fn draw_browser_status(frame: &mut Frame, area: Rect, app: &App) {
                 Style::default().fg(RED),
             ),
         ])
+    } else if let Some(error) = &app.event_refresh_error {
+        event_status_line(error)
     } else if app.filtering {
         Line::from(vec![
             Span::styled(
