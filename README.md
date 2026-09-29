@@ -108,7 +108,8 @@ The active agent is visible in the footer and saved to `$XDG_CONFIG_HOME/btui/co
 - Extended issue details load in the background and are cached by identity and freshness.
 - Nearby relationships warm concurrently so following one often feels immediate.
 - Independent, bounded viewports keep long lists and issue bodies under control.
-- A lightweight Beads revision check refreshes external changes without repeatedly running the heavier list command.
+- Beads 1.3 event hints coalesce external changes into background refreshes when the workspace journal is enabled. Older binaries and disabled journals keep revision polling; a 30-second reconciliation refresh covers changes outside the feed.
+- `btui` never enables the journal itself. Workspace owners can opt in with `bd config set events-journal true`; all writers need journal coverage. Embedded CLI contracts are tested against Beads 1.2.2 and 1.3.0.
 - Wide terminals use side-by-side panes; narrow terminals stack them automatically.
 
 ## Project boundaries

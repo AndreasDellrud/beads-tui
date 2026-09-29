@@ -251,8 +251,14 @@ fn start_work(
     } else {
         LaunchTarget::detect()
     };
+    let foreground = matches!(&target, LaunchTarget::Foreground);
     let result = match target {
-        LaunchTarget::Foreground => launch_foreground(terminal, launcher, &request, agent),
+        LaunchTarget::Foreground => {
+            app.stop_event_monitor();
+            let result = launch_foreground(terminal, launcher, &request, agent);
+            app.start_event_monitor();
+            result
+        }
         LaunchTarget::Herdr { workspace_id } => launcher
             .launch_herdr(&request, agent, &workspace_id)
             .map_err(|error| anyhow::anyhow!("{error:#}")),
@@ -262,7 +268,12 @@ fn start_work(
             app.report_work_started(message, warning);
             app.refresh();
         }
-        Err(error) => app.report_work_error(format!("{error:#}")),
+        Err(error) => {
+            app.report_work_error(format!("{error:#}"));
+            if foreground {
+                app.refresh();
+            }
+        }
     }
     Ok(())
 }

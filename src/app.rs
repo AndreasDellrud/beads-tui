@@ -10,7 +10,9 @@ use std::{
 
 use ratatui::widgets::ListState;
 
-use crate::bd::{CliSource, Issue, IssueSource, ListOptions, ListSort, ListView, RelatedIssue};
+use crate::bd::{
+    CliSource, EventMonitor, Issue, IssueSource, ListOptions, ListSort, ListView, RelatedIssue,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Screen {
@@ -49,6 +51,7 @@ enum LoadResponse {
         result: Box<Result<Issue, String>>,
     },
     Prefetch {
+        generation: u64,
         id: String,
         result: Box<Result<Issue, String>>,
     },
@@ -172,6 +175,7 @@ struct PrefetchState {
     pending: VecDeque<String>,
     in_flight: HashSet<String>,
     stopped: bool,
+    generation: u64,
 }
 
 struct Prefetcher {
@@ -189,7 +193,7 @@ impl Prefetcher {
                 .name(format!("btui-bd-prefetch-{worker}"))
                 .spawn(move || {
                     loop {
-                        let id = {
+                        let (id, generation) = {
                             let (lock, ready) = &*worker_state;
                             let mut state = lock.lock().expect("prefetch state poisoned");
                             while state.pending.is_empty() && !state.stopped {
@@ -203,7 +207,7 @@ impl Prefetcher {
                                 .pop_front()
                                 .expect("prefetch request disappeared");
                             state.in_flight.insert(id.clone());
-                            id
+                            (id, state.generation)
                         };
                         let result = worker_source
                             .show(&id)
@@ -217,6 +221,7 @@ impl Prefetcher {
                         }
                         if worker_responses
                             .send(LoadResponse::Prefetch {
+                                generation,
                                 id,
                                 result: Box::new(result),
                             })
@@ -229,6 +234,14 @@ impl Prefetcher {
                 .expect("failed to start a bd prefetch thread");
         }
         Self { state }
+    }
+
+    fn invalidate(&self) -> u64 {
+        let (lock, _) = &*self.state;
+        let mut state = lock.lock().expect("prefetch state poisoned");
+        state.generation = state.generation.wrapping_add(1);
+        state.pending.clear();
+        state.generation
     }
 
     fn replace_pending(&self, ids: Vec<String>) {
@@ -280,6 +293,7 @@ pub struct App {
     pub loading_list: bool,
     pub showing_refresh: bool,
     pub auto_refresh_error: Option<String>,
+    pub event_refresh_error: Option<String>,
     pub view: ListView,
     pub sort: ListSort,
     pub screen: Screen,
@@ -299,13 +313,20 @@ pub struct App {
     checking_revision: bool,
     refresh_after_load: bool,
     next_revision_check: Instant,
+    next_reconciliation: Instant,
+    event_monitor: Option<EventMonitor>,
+    prefetch_generation: u64,
+    force_detail_refresh: bool,
 }
 
 const REVISION_POLL_INTERVAL: Duration = Duration::from_secs(2);
+const RECONCILIATION_INTERVAL: Duration = Duration::from_secs(30);
 
 impl App {
     pub fn load() -> Self {
-        Self::with_source(Box::new(CliSource))
+        let mut app = Self::with_source(Box::new(CliSource));
+        app.start_event_monitor();
+        app
     }
 
     fn with_source(source: Box<dyn IssueSource>) -> Self {
@@ -324,6 +345,7 @@ impl App {
             loading_list: false,
             showing_refresh: false,
             auto_refresh_error: None,
+            event_refresh_error: None,
             view: ListView::default(),
             sort: ListSort::default(),
             screen: Screen::default(),
@@ -343,12 +365,23 @@ impl App {
             checking_revision: false,
             refresh_after_load: false,
             next_revision_check: Instant::now(),
+            next_reconciliation: Instant::now() + RECONCILIATION_INTERVAL,
+            event_monitor: None,
+            prefetch_generation: 0,
+            force_detail_refresh: false,
         };
         app.refresh();
         app
     }
 
     pub fn poll(&mut self) {
+        if let Some(monitor) = &self.event_monitor {
+            let update = monitor.poll();
+            self.event_refresh_error = update.error;
+            if update.changed {
+                self.external_change();
+            }
+        }
         while let Ok(response) = self.loader.responses.try_recv() {
             match response {
                 LoadResponse::List { generation, result } => {
@@ -390,8 +423,20 @@ impl App {
                             if self.screen == Screen::Issue
                                 && self.detail.as_ref().is_some_and(|current| current.id == id)
                             {
+                                let selected = self
+                                    .relationships()
+                                    .get(self.relationship_index)
+                                    .map(|(direction, related)| (*direction, related.id.clone()));
                                 self.detail = Some(issue);
-                                self.relationship_index = 0;
+                                self.relationship_index = selected
+                                    .and_then(|(direction, id)| {
+                                        self.relationships().iter().position(
+                                            |(new_direction, related)| {
+                                                *new_direction == direction && related.id == id
+                                            },
+                                        )
+                                    })
+                                    .unwrap_or(0);
                                 self.error = None;
                                 self.warm_relationship_cache();
                             }
@@ -399,8 +444,14 @@ impl App {
                         Err(error) => self.error = Some(error),
                     }
                 }
-                LoadResponse::Prefetch { id, result } => {
-                    if let Ok(issue) = *result {
+                LoadResponse::Prefetch {
+                    generation,
+                    id,
+                    result,
+                } => {
+                    if generation == self.prefetch_generation
+                        && let Ok(issue) = *result
+                    {
                         self.detail_cache.insert(id, issue);
                     }
                 }
@@ -416,11 +467,7 @@ impl App {
                                 .is_some_and(|current| current != &revision);
                             self.revision = Some(revision);
                             if changed {
-                                if self.loading_list {
-                                    self.refresh_after_load = true;
-                                } else {
-                                    self.refresh_quietly();
-                                }
+                                self.external_change();
                             }
                         }
                         Err(error) => {
@@ -433,13 +480,47 @@ impl App {
     }
 
     pub fn tick(&mut self, now: Instant) {
+        if now >= self.next_reconciliation {
+            self.next_reconciliation = now + RECONCILIATION_INTERVAL;
+            self.external_change();
+        }
         if !self.checking_revision && now >= self.next_revision_check {
             self.request_revision(now);
         }
     }
 
     pub fn refresh(&mut self) {
+        self.invalidate_details();
         self.request_list(true);
+    }
+
+    fn invalidate_details(&mut self) {
+        self.detail_cache.clear();
+        self.prefetch_generation = self.loader.prefetcher.invalidate();
+        self.detail_generation = self.detail_generation.wrapping_add(1);
+        self.loading_detail = false;
+        self.force_detail_refresh = true;
+    }
+
+    fn external_change(&mut self) {
+        self.invalidate_details();
+        if self.loading_list {
+            self.refresh_after_load = true;
+        } else {
+            self.refresh_quietly();
+        }
+    }
+
+    pub fn stop_event_monitor(&mut self) {
+        self.event_monitor = None;
+    }
+
+    pub fn start_event_monitor(&mut self) {
+        self.stop_event_monitor();
+        match EventMonitor::start() {
+            Ok(monitor) => self.event_monitor = Some(monitor),
+            Err(error) => self.event_refresh_error = Some(error.to_string()),
+        }
     }
 
     pub fn work_issue(&self) -> Option<&Issue> {
@@ -853,9 +934,14 @@ impl App {
     }
 
     fn refresh_open_issue_if_stale(&mut self) {
-        if self.screen != Screen::Issue || self.loading_detail {
+        if self.screen != Screen::Issue {
+            self.force_detail_refresh = false;
             return;
         }
+        if self.loading_detail {
+            return;
+        }
+        let force = std::mem::take(&mut self.force_detail_refresh);
         let Some(current) = self.detail.as_ref() else {
             return;
         };
@@ -864,9 +950,10 @@ impl App {
             .iter()
             .find(|issue| issue.id == current.id)
             .cloned();
-        if preview
-            .as_ref()
-            .is_none_or(|preview| preview.updated_at != current.updated_at)
+        if force
+            || preview
+                .as_ref()
+                .is_none_or(|preview| preview.updated_at != current.updated_at)
         {
             let request = preview.unwrap_or_else(|| current.clone());
             self.detail_cache.remove(&request.id);
@@ -1105,6 +1192,115 @@ mod tests {
             app.poll();
             thread::sleep(Duration::from_millis(2));
         }
+    }
+
+    #[test]
+    fn feed_failure_is_visible_on_browser_and_issue_screens() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let mut harness = test_app(Duration::ZERO, false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        harness.app.event_refresh_error = Some("disconnected".into());
+        for screen in [Screen::Browser, Screen::Issue] {
+            harness.app.screen = screen;
+            let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
+            terminal
+                .draw(|frame| crate::ui::draw(frame, &mut harness.app, None))
+                .unwrap();
+            let text: String = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect();
+            assert!(text.contains("Event feed: disconnected"));
+            assert!(text.contains("periodic refresh continues"));
+        }
+    }
+
+    #[test]
+    fn event_refresh_keeps_the_selected_relationship() {
+        struct Source;
+        impl IssueSource for Source {
+            fn list(&self, _: ListOptions) -> anyhow::Result<Vec<Issue>> {
+                Ok(serde_json::from_str(include_str!(
+                    "../tests/fixtures/bd-show.json"
+                ))?)
+            }
+            fn show(&self, _: &str) -> anyhow::Result<Issue> {
+                Ok(self.list(ListOptions::default())?.remove(0))
+            }
+            fn revision(&self) -> anyhow::Result<String> {
+                Ok("stable".into())
+            }
+        }
+        let mut app = App::with_source(Box::new(Source));
+        wait_until(&mut app, |app| !app.loading_list);
+        app.open_selected_issue();
+        wait_until(&mut app, |app| !app.loading_detail);
+        app.select_next_relationship();
+        assert_eq!(app.relationship_index, 1);
+        app.external_change();
+        wait_until(&mut app, |app| !app.loading_list && !app.loading_detail);
+        assert_eq!(app.relationship_index, 1);
+        assert_eq!(app.relationships()[app.relationship_index].1.id, "btui-2");
+    }
+
+    #[test]
+    fn reconciliation_reloads_unchanged_timestamps_and_preserves_selection() {
+        let mut harness = test_app(Duration::ZERO, false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        harness.app.select_next();
+        harness.app.open_selected_issue();
+        wait_until(&mut harness.app, |app| !app.loading_detail);
+        let before = harness.show_calls.load(Ordering::SeqCst);
+        // Dependency/comment changes can leave updated_at unchanged.
+        harness.issues.lock().unwrap()[1].notes = "external change".into();
+        harness.app.tick(harness.app.next_reconciliation);
+        wait_until(&mut harness.app, |app| {
+            !app.loading_list && !app.loading_detail
+        });
+        assert_eq!(harness.app.detail.as_ref().unwrap().id, "btui-2");
+        assert_eq!(
+            harness.app.detail.as_ref().unwrap().notes,
+            "external change"
+        );
+        assert!(harness.show_calls.load(Ordering::SeqCst) > before);
+    }
+
+    #[test]
+    fn event_bursts_coalesce_refreshes_and_invalidate_prefetch_generations() {
+        let mut harness = test_app(Duration::from_millis(20), false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        let before = harness.list_calls.load(Ordering::SeqCst);
+        let old = harness.app.prefetch_generation;
+        harness.app.external_change();
+        for _ in 0..100 {
+            harness.app.external_change();
+        }
+        assert_ne!(harness.app.prefetch_generation, old);
+        assert!(harness.app.refresh_after_load);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        assert_eq!(harness.list_calls.load(Ordering::SeqCst), before + 2);
+        assert_eq!(harness.app.detail.as_ref().unwrap().id, "btui-1");
+    }
+
+    #[test]
+    fn invalidation_prevents_late_prefetch_from_repopulating_cache() {
+        let mut harness = test_app(Duration::from_millis(30), false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        harness.app.loader.warm_details(vec!["btui-1".into()]);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while harness.show_calls.load(Ordering::SeqCst) == 0 {
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(1));
+        }
+        harness.app.external_change();
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        // Both workers have completed; poll every queued response.
+        thread::sleep(Duration::from_millis(40));
+        harness.app.poll();
+        assert!(!harness.app.detail_cache.contains_key("btui-1"));
     }
 
     #[test]
@@ -1464,7 +1660,13 @@ mod tests {
         wait_until(&mut harness.app, |app| !app.loading_list);
         harness.app.open_selected_issue();
         wait_until(&mut harness.app, |app| !app.loading_detail);
-        let show_calls_before_refresh = harness.show_calls.load(Ordering::SeqCst);
+        let show_calls_before_refresh = harness
+            .requested_shows
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|id| *id == "btui-1")
+            .count();
 
         harness.issues.lock().unwrap()[0].status = "closed".to_owned();
         harness.app.refresh();
@@ -1476,7 +1678,13 @@ mod tests {
         assert_eq!(harness.app.detail.as_ref().unwrap().id, "btui-1");
         assert_eq!(harness.app.detail.as_ref().unwrap().status, "closed");
         assert_eq!(
-            harness.show_calls.load(Ordering::SeqCst),
+            harness
+                .requested_shows
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|id| *id == "btui-1")
+                .count(),
             show_calls_before_refresh + 1
         );
     }
