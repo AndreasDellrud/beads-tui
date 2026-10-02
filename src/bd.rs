@@ -401,6 +401,10 @@ fn follow_events(
             )));
         }
     };
+    // The previous follower's diagnostic no longer describes this process.
+    // An idle follower emits no readiness record or events, so reset only
+    // after spawn succeeds; its readers/exit handling report any new failure.
+    state.lock().expect("events state poisoned").update.error = None;
     let output = child.stdout.take().expect("piped stdout");
     let errors = child.stderr.take().expect("piped stderr");
     let output_state = Arc::clone(state);
@@ -833,6 +837,94 @@ mod tests {
         read_event_output(b"".as_slice(), &state);
         assert!(!state.lock().unwrap().update.changed);
         assert_eq!(state.lock().unwrap().cursor, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_event_spawn_preserves_diagnostic() {
+        use std::sync::{Arc, Mutex, mpsc};
+
+        let state = Arc::new(Mutex::new(EventState {
+            update: EventUpdate {
+                changed: false,
+                error: Some("previous feed failed".into()),
+            },
+            ..EventState::default()
+        }));
+        let (_stop, stopped) = mpsc::channel();
+        let missing = std::env::temp_dir()
+            .join(format!("btui-missing-events-{}", std::process::id()))
+            .join("bd");
+        let outcome = follow_events(Command::new(missing), &state, &stopped);
+        assert!(
+            matches!(outcome, Some(FeedEnd::Failed(error)) if error.contains("could not start bd events"))
+        );
+        assert_eq!(
+            state.lock().unwrap().update.error.as_deref(),
+            Some("previous feed failed")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn event_retry_clears_old_error_without_new_events() {
+        use std::{
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                mpsc,
+            },
+            time::{Duration, Instant},
+        };
+
+        for (diagnostic, expected_cursor) in [
+            ("printf 'feed failed\\n' >&2", 0),
+            (
+                "printf '%s\\n' '{\"code\":\"events_journal_truncated\",\"head\":42}'",
+                42,
+            ),
+        ] {
+            let (resume, resumed) = mpsc::channel();
+            let first = AtomicBool::new(true);
+            let monitor = EventMonitor::spawn(
+                move |cursor| {
+                    let mut command = Command::new("sh");
+                    if first.swap(false, Ordering::SeqCst) {
+                        command.args(["-c", diagnostic]);
+                    } else {
+                        assert_eq!(cursor, expected_cursor);
+                        resumed.recv_timeout(Duration::from_secs(3)).unwrap();
+                        command.args(["-c", "exec sleep 60"]);
+                    }
+                    command
+                },
+                Duration::from_millis(10),
+            )
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while monitor.poll().error.is_none() {
+                assert!(
+                    Instant::now() < deadline,
+                    "initial feed error was not reported"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            resume.send(()).unwrap();
+            while monitor.poll().error.is_some() {
+                assert!(
+                    Instant::now() < deadline,
+                    "idle retry retained the old error"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let state = monitor.state.lock().unwrap();
+            assert_eq!(state.cursor, expected_cursor);
+            assert!(
+                !state.update.changed,
+                "idle retry should not invent an event"
+            );
+            drop(state);
+            drop(monitor);
+        }
     }
 
     #[cfg(unix)]
