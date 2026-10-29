@@ -1358,6 +1358,47 @@ mod tests {
     }
 
     #[test]
+    fn remaining_startups_render_alongside_success_or_warning_on_both_screens() {
+        use ratatui::{Terminal, backend::TestBackend};
+        for warning in [None, Some("focus failed")] {
+            let mut harness = test_app(Duration::ZERO, false);
+            let app = &mut harness.app;
+            wait_until(app, |app| !app.loading_list);
+            let (first, release_first) = held_launch("btui-1", started("btui-1"));
+            let (second, release_second) = held_launch(
+                "btui-2",
+                Ok(crate::work::LaunchReport {
+                    message: "Started btui-2".into(),
+                    warning: warning.map(str::to_owned),
+                }),
+            );
+            app.pending_launches.extend([first, second]);
+            release_second.send(()).unwrap();
+            wait_until(app, |app| app.pending_launches.len() == 1);
+            for screen in [Screen::Browser, Screen::Issue] {
+                app.screen = screen;
+                for width in [80, 140] {
+                    let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
+                    terminal
+                        .draw(|frame| crate::ui::draw(frame, app, None))
+                        .unwrap();
+                    let text: String = terminal
+                        .backend()
+                        .buffer()
+                        .content()
+                        .iter()
+                        .map(|cell| cell.symbol())
+                        .collect();
+                    assert!(text.contains("Starting Codex for btui-1"));
+                    assert!(text.contains(warning.unwrap_or("Started btui-2")));
+                }
+            }
+            release_first.send(()).unwrap();
+            wait_until(app, |app| app.pending_launches.is_empty());
+        }
+    }
+
+    #[test]
     fn managed_startups_complete_out_of_order_without_losing_another_tasks_error() {
         let mut harness = test_app(Duration::ZERO, false);
         let app = &mut harness.app;

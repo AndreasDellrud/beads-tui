@@ -145,12 +145,7 @@ fn draw_issue_screen(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>)
     );
 
     let (status_area, keybindings_area) = footer_areas(page[2]);
-    let status = if let Some(status) = launch_status_line(
-        app.work_message
-            .as_deref()
-            .or(app.pending_work_message().as_deref()),
-        app.work_error.as_deref(),
-    ) {
+    let status = if let Some(status) = work_status_line(app) {
         status
     } else if let Some(error) = &app.error {
         Line::styled(
@@ -448,6 +443,22 @@ fn footer_areas(area: Rect) -> (Rect, Rect) {
     (rows[0], rows[1])
 }
 
+fn work_status_line(app: &App) -> Option<Line<'static>> {
+    let pending = app.pending_work_message();
+    let outcome = app.work_error.as_deref().or(app.work_message.as_deref());
+    let message = match (pending.as_deref(), outcome) {
+        (Some(pending), Some(outcome)) => Some(format!("{pending} · {outcome}")),
+        (Some(pending), None) => Some(pending.to_owned()),
+        (None, Some(outcome)) => Some(outcome.to_owned()),
+        (None, None) => None,
+    };
+    if app.work_error.is_some() {
+        launch_status_line(None, message.as_deref())
+    } else {
+        launch_status_line(message.as_deref(), None)
+    }
+}
+
 fn launch_status_line(message: Option<&str>, error: Option<&str>) -> Option<Line<'static>> {
     if let Some(error) = error {
         Some(Line::from(vec![
@@ -487,12 +498,7 @@ fn event_status_line(error: &str) -> Line<'static> {
 }
 
 fn draw_browser_status(frame: &mut Frame, area: Rect, app: &App) {
-    let line = if let Some(status) = launch_status_line(
-        app.work_message
-            .as_deref()
-            .or(app.pending_work_message().as_deref()),
-        app.work_error.as_deref(),
-    ) {
+    let line = if let Some(status) = work_status_line(app) {
         status
     } else if let Some(error) = &app.error {
         Line::from(vec![
