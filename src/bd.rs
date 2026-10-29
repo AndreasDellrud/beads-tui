@@ -175,7 +175,8 @@ fn list_with(runner: &impl CommandRunner, options: ListOptions) -> Result<Vec<Is
     }
     let references: Vec<&str> = arguments.iter().map(String::as_str).collect();
     let output = run(runner, &references)?;
-    parse_issues(&output).context("bd list returned unexpected JSON")
+    parse_issues(&output)
+        .map_err(|error| anyhow::anyhow!("bd list returned unexpected JSON: {error:#}"))
 }
 
 fn show_with(runner: &impl CommandRunner, id: &str) -> Result<Issue> {
@@ -191,7 +192,8 @@ fn show_with(runner: &impl CommandRunner, id: &str) -> Result<Issue> {
             "--include-dependents",
         ],
     )?;
-    parse_issue(&output).context("bd show returned unexpected JSON")
+    parse_issue(&output)
+        .map_err(|error| anyhow::anyhow!("bd show returned unexpected JSON: {error:#}"))
 }
 
 #[derive(Deserialize)]
@@ -202,8 +204,8 @@ struct VersionControlStatus {
 
 fn revision_with(runner: &impl CommandRunner) -> Result<String> {
     let output = run(runner, &["--readonly", "vc", "status", "--json"])?;
-    let status: VersionControlStatus =
-        serde_json::from_slice(&output).context("bd vc status returned unexpected JSON")?;
+    let status: VersionControlStatus = parse_response(&output)
+        .map_err(|error| anyhow::anyhow!("bd vc status returned unexpected JSON: {error:#}"))?;
     Ok(format!("{}:{}", status.branch, status.commit))
 }
 
@@ -235,29 +237,89 @@ fn run(runner: &impl CommandRunner, arguments: &[&str]) -> Result<Vec<u8>> {
         .run(arguments)
         .context("could not start bd; install Beads and ensure `bd` is on PATH")?;
 
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
     if !output.success {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        if message.is_empty() {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let diagnostics: Vec<_> = [stderr.as_str(), stdout.as_str()]
+            .into_iter()
+            .filter(|text| !text.is_empty())
+            .collect();
+        if diagnostics.is_empty() {
             bail!("bd failed without a diagnostic");
         }
-        bail!("bd failed: {message}");
+        // Keep both streams verbatim: structured errors carry optional code/hint
+        // fields, and plain notices must not hide a stdout command failure.
+        bail!("bd failed: {}", diagnostics.join("\n"));
     }
-
+    if !stderr.is_empty() {
+        bail!("bd returned a diagnostic: {stderr}");
+    }
     Ok(output.stdout)
 }
 
-fn parse_issues(json: &[u8]) -> Result<Vec<Issue>, serde_json::Error> {
-    serde_json::from_slice(json)
+// Keep metadata alongside the untouched payload. A truncated snapshot must not
+// silently replace the complete list requested with --limit 0.
+struct JsonResponse {
+    data: serde_json::Value,
+    pagination: Option<Pagination>,
 }
 
-fn parse_issue(json: &[u8]) -> Result<Issue, serde_json::Error> {
-    let mut issues = parse_issues(json)?;
-    issues.pop().ok_or_else(|| {
-        serde_json::Error::io(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "bd show returned no issue",
-        ))
+#[derive(Deserialize)]
+struct Pagination {
+    returned: u64,
+    #[serde(default)]
+    total: Option<u64>,
+    truncated: bool,
+}
+
+fn normalize_response(mut value: serde_json::Value) -> Result<JsonResponse> {
+    let mut pagination = None;
+    if let Some(object) = value.as_object_mut() {
+        if let Some(version) = object.get("schema_version")
+            && version.as_u64() != Some(1)
+        {
+            bail!("unsupported bd schema_version {version}; btui supports schema 1");
+        }
+        // A data field alone can belong to a legacy object. Both keys form
+        // the envelope marker; typed parsing still rejects incomplete shapes.
+        if object.contains_key("data") && object.contains_key("schema_version") {
+            if let Some(meta) = object.remove("pagination") {
+                pagination =
+                    Some(serde_json::from_value(meta).context("invalid bd envelope pagination")?);
+            }
+            value = object.remove("data").expect("checked data");
+        }
+    }
+    Ok(JsonResponse {
+        data: value,
+        pagination,
     })
+}
+
+fn parse_response<T: serde::de::DeserializeOwned>(json: &[u8]) -> Result<T> {
+    let response = normalize_response(serde_json::from_slice(json)?)?;
+    if response.data.get("error").is_some() {
+        bail!("bd returned an error: {}", response.data);
+    }
+    if let Some(meta) = response.pagination
+        && meta.truncated
+    {
+        bail!(
+            "bd returned a truncated snapshot ({} returned, total {:?}); refresh with a compatible bd",
+            meta.returned,
+            meta.total
+        );
+    }
+    Ok(serde_json::from_value(response.data)?)
+}
+
+fn parse_issues(json: &[u8]) -> Result<Vec<Issue>> {
+    parse_response(json)
+}
+
+fn parse_issue(json: &[u8]) -> Result<Issue> {
+    let mut issues = parse_issues(json)?;
+    issues.pop().context("bd show returned no issue")
 }
 
 // A feed is an optional invalidation hint, never a replacement for bd list/show.
@@ -514,7 +576,14 @@ fn read_event_output(reader: impl io::Read, state: &std::sync::Mutex<EventState>
 }
 
 fn accept_event(value: serde_json::Value, state: &mut EventState) -> Result<(), FeedEnd> {
-    let invalid = || FeedEnd::Failed("unsupported bd event record; polling continues".into());
+    let value = normalize_response(value)
+        .map_err(|error| FeedEnd::Failed(format!("bd events: {error:#}; polling continues")))?
+        .data;
+    let invalid = || {
+        FeedEnd::Failed(format!(
+            "unsupported bd event record: {value}; polling continues"
+        ))
+    };
     if value.get("error").is_some() || value.get("code").is_some() {
         if value["code"] == "events_journal_truncated" {
             return Err(FeedEnd::Rebaseline(
@@ -560,10 +629,15 @@ fn accept_event(value: serde_json::Value, state: &mut EventState) -> Result<(), 
 fn read_event_errors(reader: impl io::Read, state: &std::sync::Mutex<EventState>) {
     use io::{BufRead, Read};
     let mut reader = io::BufReader::new(reader);
+    let mut diagnostic = Vec::new();
     loop {
-        let mut line = Vec::new();
-        match reader.by_ref().take(8193).read_until(b'\n', &mut line) {
-            Ok(0) => return,
+        let remaining = 8192_usize.saturating_sub(diagnostic.len());
+        match reader
+            .by_ref()
+            .take(remaining as u64 + 1)
+            .read_until(b'\n', &mut diagnostic)
+        {
+            Ok(0) if diagnostic.is_empty() => return,
             Err(_) => {
                 set_feed_end(
                     state,
@@ -571,23 +645,34 @@ fn read_event_errors(reader: impl io::Read, state: &std::sync::Mutex<EventState>
                 );
                 return;
             }
-            _ => {}
-        }
-        let text = String::from_utf8_lossy(&line);
-        if text.contains("events journal is disabled")
-            || text.contains("unknown command \"events\"")
-        {
-            set_feed_end(state, FeedEnd::Unavailable);
-            return;
-        }
-        // Diagnostics are bounded and visible. Unknown stderr is not proof of a
-        // supported healthy feed; fall back instead of leaving a silent watcher.
-        if !text.trim().is_empty() {
-            set_feed_end(
-                state,
-                FeedEnd::Failed(format!("bd events: {}", text.trim())),
-            );
-            return;
+            Ok(count) => {
+                let text = String::from_utf8_lossy(&diagnostic);
+                if text.contains("events journal is disabled")
+                    || text.contains("unknown command \"events\"")
+                {
+                    set_feed_end(state, FeedEnd::Unavailable);
+                    return;
+                }
+                if diagnostic.iter().all(u8::is_ascii_whitespace) {
+                    diagnostic.clear();
+                    continue;
+                }
+                // Pretty-printed structured errors need the complete bounded
+                // document; a plain line remains an immediate visible fallback.
+                if count > 0
+                    && diagnostic.len() <= 8192
+                    && text.trim_start().starts_with('{')
+                    && serde_json::from_slice::<serde_json::Value>(&diagnostic)
+                        .is_err_and(|e| e.is_eof())
+                {
+                    continue;
+                }
+                set_feed_end(
+                    state,
+                    FeedEnd::Failed(format!("bd events: {}", text.trim())),
+                );
+                return;
+            }
         }
     }
 }
@@ -653,6 +738,10 @@ mod tests {
         for fixture in [
             include_str!("../tests/fixtures/bd-1.2.2.json"),
             include_str!("../tests/fixtures/bd-1.3.0.json"),
+            include_str!("../tests/fixtures/bd-1.2.2-json-matrix.json"),
+            include_str!("../tests/fixtures/bd-1.3.0-json-unset.json"),
+            include_str!("../tests/fixtures/bd-1.3.0-json-0.json"),
+            include_str!("../tests/fixtures/bd-1.3.0-json-1.json"),
         ] {
             let fixture: serde_json::Value = serde_json::from_str(fixture).unwrap();
             let captures = fixture["captures"].as_array().unwrap();
@@ -703,14 +792,248 @@ mod tests {
             assert!(revision_with(&runner).unwrap().starts_with("main:"));
             assert_command(runner, "revision");
             let missing = captures.iter().find(|c| c["name"] == "missing").unwrap();
-            let diagnostic = missing["stderr"].as_str().unwrap().trim();
-            let runner = FakeRunner::exits_with(diagnostic);
-            assert_eq!(
-                show_with(&runner, "compat-missing")
+            let stdout = missing["stdout"].as_str().unwrap();
+            let stderr = missing["stderr"].as_str().unwrap();
+            let runner = FakeRunner::returns(Ok(CommandResult {
+                success: false,
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: stderr.as_bytes().to_vec(),
+            }));
+            let error = show_with(&runner, "compat-missing")
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("bd failed:"));
+            for text in [stdout, stderr] {
+                if !text.trim().is_empty() {
+                    assert!(error.contains(text.trim()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn captured_empty_errors_and_event_framing_replay_in_every_json_mode() {
+        for fixture in [
+            include_str!("../tests/fixtures/bd-1.2.2-json-matrix.json"),
+            include_str!("../tests/fixtures/bd-1.3.0-json-unset.json"),
+            include_str!("../tests/fixtures/bd-1.3.0-json-0.json"),
+            include_str!("../tests/fixtures/bd-1.3.0-json-1.json"),
+        ] {
+            let fixture: serde_json::Value = serde_json::from_str(fixture).unwrap();
+            for capture in fixture["captures"].as_array().unwrap() {
+                let name = capture["name"].as_str().unwrap();
+                let stdout = capture["stdout"].as_str().unwrap().as_bytes();
+                let stderr = capture["stderr"].as_str().unwrap().as_bytes();
+                if name == "empty" {
+                    assert!(parse_issues(stdout).unwrap().is_empty());
+                }
+                if name.contains("error") {
+                    assert_eq!(capture["success"], false);
+                    let runner = FakeRunner::returns(Ok(CommandResult {
+                        success: false,
+                        stdout: stdout.to_vec(),
+                        stderr: stderr.to_vec(),
+                    }));
+                    let error = run(&runner, &[]).unwrap_err().to_string();
+                    assert_ne!(error, "bd failed without a diagnostic");
+                    for bytes in [stdout, stderr] {
+                        let text = std::str::from_utf8(bytes).unwrap().trim();
+                        if !text.is_empty() {
+                            assert!(error.contains(text));
+                        }
+                    }
+                }
+                if name.starts_with("events-") && !name.contains("error") {
+                    let state = std::sync::Mutex::new(EventState::default());
+                    read_event_output(stdout, &state);
+                    read_event_errors(stderr, &state);
+                    match name {
+                        "events-initial-truncated" | "events-midstream-truncated" => {
+                            assert!(matches!(
+                                state.lock().unwrap().end,
+                                Some(FeedEnd::Rebaseline(_))
+                            ));
+                        }
+                        "events-enabled" => {
+                            let state = state.lock().unwrap();
+                            assert!(state.end.is_none());
+                            assert!(state.update.changed);
+                        }
+                        "events-disabled" => assert!(matches!(
+                            state.lock().unwrap().end,
+                            Some(FeedEnd::Unavailable)
+                        )),
+                        _ => {}
+                    }
+                }
+                if name == "pagination" && fixture["envelope"] == "1" {
+                    let response =
+                        normalize_response(serde_json::from_slice(stdout).unwrap()).unwrap();
+                    assert!(response.data.is_array());
+                    let meta = response.pagination.unwrap();
+                    assert!(meta.truncated);
+                    assert_eq!(meta.returned, 1);
+                    assert_eq!(meta.total, Some(2));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn envelopes_preserve_payloads_and_validate_schema_and_pagination() {
+        let legacy: serde_json::Value = serde_json::from_slice(LIST_FIXTURE).unwrap();
+        let wrapped = serde_json::json!({"schema_version":1,"data":legacy,
+            "pagination":{"returned":2,"total":2,"truncated":false}, "future":true});
+        assert_eq!(
+            parse_issues(&serde_json::to_vec(&wrapped).unwrap()).unwrap(),
+            parse_issues(LIST_FIXTURE).unwrap()
+        );
+        assert!(
+            parse_issues(br#"{"schema_version":1,"data":[]}"#)
+                .unwrap()
+                .is_empty()
+        );
+        for (input, expected) in [
+            (
+                r#"{"schema_version":2,"data":[]}"#,
+                "unsupported bd schema_version 2",
+            ),
+            (
+                r#"{"schema_version":"1","data":[]}"#,
+                "unsupported bd schema_version",
+            ),
+            (r#"{"data":[]}"#, "invalid type"),
+            (r#"{"schema_version":1}"#, "invalid type"),
+            (r#"{"schema_version":1,"data":null}"#, "invalid type"),
+            (
+                r#"{"schema_version":1,"data":[],"pagination":{}}"#,
+                "invalid bd envelope pagination",
+            ),
+            (
+                r#"{"schema_version":1,"data":[],"pagination":{"returned":0,"truncated":true}}"#,
+                "truncated snapshot",
+            ),
+            (
+                r#"{"schema_version":1,"data":{"error":"denied","code":"refused","hint":"retry"}}"#,
+                "denied",
+            ),
+        ] {
+            let runner = FakeRunner::succeeds(input.as_bytes());
+            let error = list_with(&runner, ListOptions::default())
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(expected), "{error}");
+        }
+    }
+
+    #[test]
+    fn legacy_objects_with_data_fields_are_not_mistaken_for_envelopes() {
+        let runner = FakeRunner::succeeds(br#"{"branch":"main","commit":"abc","data":[]}"#);
+        assert_eq!(revision_with(&runner).unwrap(), "main:abc");
+    }
+
+    #[test]
+    fn structured_event_stderr_retains_code_and_hint_with_bounded_input() {
+        for envelope in [false, true] {
+            let payload = serde_json::json!({"error":"denied","code":"refused","hint":"retry"});
+            let value = if envelope {
+                serde_json::json!({"schema_version":1,"data":payload})
+            } else {
+                payload
+            };
+            let json = serde_json::to_vec_pretty(&value).unwrap();
+            let state = std::sync::Mutex::new(EventState::default());
+            read_event_errors(json.as_slice(), &state);
+            let state = state.lock().unwrap();
+            let Some(FeedEnd::Failed(message)) = &state.end else {
+                panic!("expected fallback")
+            };
+            for field in ["denied", "refused", "retry"] {
+                assert!(message.contains(field));
+            }
+        }
+        let state = std::sync::Mutex::new(EventState::default());
+        let oversized = format!("{{\"error\":\"{}", "x".repeat(10000));
+        read_event_errors(oversized.as_bytes(), &state);
+        let state = state.lock().unwrap();
+        let Some(FeedEnd::Failed(message)) = &state.end else {
+            panic!("expected bounded fallback")
+        };
+        assert!(message.len() < 8300);
+    }
+
+    #[test]
+    fn both_failure_streams_and_success_diagnostics_remain_visible() {
+        for envelope in [false, true] {
+            let payload = serde_json::json!({"error":"denied","code":"refused","hint":"retry"});
+            let error = if envelope {
+                serde_json::json!({"schema_version":1,"data":payload})
+            } else {
+                payload
+            };
+            for stdout_error in [false, true] {
+                let json = serde_json::to_vec(&error).unwrap();
+                let runner = FakeRunner::returns(Ok(CommandResult {
+                    success: false,
+                    stdout: if stdout_error {
+                        json.clone()
+                    } else {
+                        Vec::new()
+                    },
+                    stderr: if stdout_error {
+                        b"plain notice".to_vec()
+                    } else {
+                        json
+                    },
+                }));
+                let message = list_with(&runner, ListOptions::default())
                     .unwrap_err()
-                    .to_string(),
-                format!("bd failed: {diagnostic}")
-            );
+                    .to_string();
+                for expected in ["denied", "refused", "retry"] {
+                    assert!(message.contains(expected));
+                }
+                if stdout_error {
+                    assert!(message.contains("plain notice"));
+                }
+            }
+        }
+        let runner = FakeRunner::returns(Ok(CommandResult {
+            success: true,
+            stdout: b"[]".to_vec(),
+            stderr: b"unexpected warning".to_vec(),
+        }));
+        assert!(
+            list_with(&runner, ListOptions::default())
+                .unwrap_err()
+                .to_string()
+                .contains("unexpected warning")
+        );
+    }
+
+    #[test]
+    fn enveloped_initial_truncation_and_raw_midstream_truncation_keep_framing() {
+        for input in [
+            "{\n  \"schema_version\":1,\n  \"data\":{\n    \"code\":\"events_journal_truncated\",\n    \"head\":42\n  }\n}\n",
+            "{\"seq\":1,\"op\":\"update\",\"issue_id\":\"x\",\"issue\":{\"id\":\"x\"}}\n{\"code\":\"events_journal_truncated\",\"head\":42}\n",
+        ] {
+            let state = std::sync::Mutex::new(EventState::default());
+            read_event_output(input.as_bytes(), &state);
+            assert!(matches!(
+                state.lock().unwrap().end,
+                Some(FeedEnd::Rebaseline(42))
+            ));
+        }
+        for input in [
+            r#"{"schema_version":2,"data":{"seq":1}}"#,
+            r#"{"data":{"head":42}}"#,
+        ] {
+            let state = std::sync::Mutex::new(EventState::default());
+            read_event_output(format!("{input}\n").as_bytes(), &state);
+            assert!(matches!(
+                state.lock().unwrap().end,
+                Some(FeedEnd::Failed(_))
+            ));
+            assert_eq!(state.lock().unwrap().cursor, 0);
         }
     }
 
@@ -1130,7 +1453,7 @@ mod tests {
 
         let error = show_with(&runner, "btui-1").unwrap_err().to_string();
 
-        assert_eq!(error, "bd show returned unexpected JSON");
+        assert!(error.starts_with("bd show returned unexpected JSON:"));
     }
 
     #[test]

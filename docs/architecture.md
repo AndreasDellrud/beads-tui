@@ -38,7 +38,31 @@ keyboard -> application state -> Ratatui frame
 
 The installed `bd` executable and its JSON output are authoritative. The typed representation deliberately defaults optional display fields so additions and omitted optional values remain compatible; missing identity, title, status, priority, or type is treated as malformed output.
 
-Subprocess failures retain `bd`'s diagnostic text. The human-oriented ANSI stream from `bd list --watch` is deliberately not parsed as an API; its installed implementation is itself a two-second polling display. Automatic invalidation uses typed version-control status JSON, optional event hints, and periodic reconciliation; the existing typed list adapter remains the only source of list records. Event snapshots are not merged into enriched issue records. The monitor keeps only a volatile consumed-invalidation cursor, not a durable applied-state checkpoint. Truncation triggers a fresh list and a restart at the reported head; all events only request current-state reads, so historical replay cannot overwrite a newer snapshot. Browser preview fields come directly from the authoritative list snapshot, so navigation never pays for redundant `bd show` processes. Opening the dedicated issue screen requests comments and dependents through the generation-guarded primary worker, caches the enriched issue by identity and freshness, and ignores results after the user returns to the browser or follows another relationship. Once relationships are known, their extended representations warm into that same cache in selection-proximity order without replacing the visible issue. A failed speculative request stays silent and normal foreground navigation remains the retry path. Warming is deliberately scoped to relationships rather than unrelated repository history.
+`src/bd.rs` normalizes raw payloads and schema-1 envelopes before typed parsing
+for list, enriched show, and revision status. An envelope requires both
+`schema_version` and `data`; a legacy object with a `data` field alone is not
+unwrapped. Explicit schema versions must be the integer 1. Optional pagination
+metadata stays alongside the untouched payload; malformed metadata and truncated
+snapshots are rejected rather than replacing an unlimited list with partial data.
+Unknown optional payload fields remain compatible. Parser context reaches the
+UI, whose existing generation checks and error path retain the last good state.
+
+Nonzero exits preserve both stdout and stderr verbatim, including structured
+`error`, optional `code`/`hint`, and plain diagnostics. An unexpected nonempty
+stderr on success also becomes a visible error. The legacy JSON deprecation
+notice is terminal-only in pinned 1.3.0 and does not occur on captured command
+pipes, so no blanket stderr suppression or environment override is needed.
+
+Event records remain JSONL. Initial truncation can be a pretty-printed schema-1
+envelope; mid-follow truncation remains a raw one-line error in 1.3.0. Both reach
+the existing rebaseline path. Structured stderr documents are accumulated within
+an 8 KiB bound so pretty-printing does not discard code or remediation fields;
+unknown diagnostics cause visible polling fallback. The disabled-journal and
+unsupported-command notices retain their established fallback behavior.
+The [tested JSON matrix](beads-1.3-migration.md#json-envelope-qualification)
+qualifies released binaries, not a future v2.0 implementation.
+
+The human-oriented ANSI stream from `bd list --watch` is deliberately not parsed as an API; its installed implementation is itself a two-second polling display. Automatic invalidation uses typed version-control status JSON, optional event hints, and periodic reconciliation; the existing typed list adapter remains the only source of list records. Event snapshots are not merged into enriched issue records. The monitor keeps only a volatile consumed-invalidation cursor, not a durable applied-state checkpoint. Truncation triggers a fresh list and a restart at the reported head; all events only request current-state reads, so historical replay cannot overwrite a newer snapshot. Browser preview fields come directly from the authoritative list snapshot, so navigation never pays for redundant `bd show` processes. Opening the dedicated issue screen requests comments and dependents through the generation-guarded primary worker, caches the enriched issue by identity and freshness, and ignores results after the user returns to the browser or follows another relationship. Once relationships are known, their extended representations warm into that same cache in selection-proximity order without replacing the visible issue. A failed speculative request stays silent and normal foreground navigation remains the retry path. Warming is deliberately scoped to relationships rather than unrelated repository history.
 
 The event child is stopped and reaped before foreground agent handoff and restarted
 with a fresh refresh on return, including launch failure. It is also reaped when

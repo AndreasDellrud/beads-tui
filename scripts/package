@@ -4,7 +4,7 @@ set -euo pipefail
 project_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 target=${1:-$(rustc -vV | sed -n 's/^host: //p')}
 dist_dir=${BTUI_DIST_DIR:-"$project_dir/dist"}
-version=$(cargo pkgid --manifest-path "$project_dir/Cargo.toml" | sed 's/.*#//')
+version=$(cargo pkgid --manifest-path "$project_dir/Cargo.toml" | sed 's/.*#//; s/.*@//')
 
 if [[ -z "$target" || -z "$version" ]]; then
   echo "Could not determine the Rust target or package version." >&2

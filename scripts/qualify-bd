@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Capture btui CLI contracts in a fresh disposable embedded workspace.
 
-Usage: scripts/qualify-bd /absolute/path/to/bd 1.3.0 /new/output.json
+Usage: scripts/qualify-bd /absolute/path/to/bd 1.3.0 /new/output.json [unset|0|1]
 Does not install binaries, migrate existing workspaces, or sync any remote.
 """
 import hashlib
 import json
 import os
+import select
 from pathlib import Path
 import subprocess
 import sys
@@ -17,6 +18,13 @@ def main():
     binary = Path(sys.argv[1]).resolve(strict=True)
     version = sys.argv[2]
     destination = Path(sys.argv[3]).resolve()
+    envelope = sys.argv[4] if len(sys.argv) == 5 else "unset"
+    if envelope not in ("unset", "0", "1"):
+        raise ValueError("expected envelope mode unset, 0 or 1")
+
+    def payload(text):
+        value = json.loads(text)
+        return value["data"] if isinstance(value, dict) and "data" in value else value
     if version not in ("1.2.2", "1.3.0"):
         raise ValueError("expected a qualified version: 1.2.2 or 1.3.0")
     if destination.exists():
@@ -39,6 +47,8 @@ def main():
                 raise RuntimeError(f"{args}: {result.stdout}\n{result.stderr}")
             return result
 
+        if envelope != "unset":
+            env["BD_JSON_ENVELOPE"] = envelope
         stamp = command([str(binary), "--version"]).stdout.strip()
         if not stamp.startswith(f"bd version {version} ("):
             raise ValueError(f"unexpected binary: {stamp}")
@@ -79,23 +89,27 @@ def main():
                     args.append("--reverse")
                 entry = capture(f"{view}-{sort}", args)
                 assert entry["success"], entry
-                assert {x["id"] for x in json.loads(entry["stdout"])} == expected
+                assert {x["id"] for x in payload(entry["stdout"])} == expected
+        empty = capture("empty", ["list", "--json", "--limit", "0", "--status", "deferred"])
+        assert empty["success"] and payload(empty["stdout"]) == []
+        capture("stdout-error", ["show", "--id=compat-missing", "--json"])
+        capture("stderr-error", ["create", "--title", "refused", "--json"])
         show_args = ["show", "--id=compat-blocked", "--json",
                      "--include-comments", "--include-dependents"]
         detail = capture("show", show_args)
         assert detail["success"], detail
-        issue = json.loads(detail["stdout"])[0]
+        issue = payload(detail["stdout"])[0]
         assert issue["dependencies"][0]["id"] == "compat-ready"
         assert issue["dependents"][0]["id"] == "compat-child"
         assert issue["comments"][0]["text"] == "A fixture comment"
         nested = workspace / "nested"
         nested.mkdir()
         entry = capture("nested-show", show_args, cwd=nested)
-        assert entry["success"] and json.loads(entry["stdout"]) == [issue]
+        assert entry["success"] and payload(entry["stdout"]) == [issue]
         linked = workspace / "linked"
         command(["git", "worktree", "add", "--orphan", "-b", "linked", str(linked)])
         entry = capture("worktree-show", show_args, cwd=linked)
-        assert entry["success"] and json.loads(entry["stdout"]) == [issue]
+        assert entry["success"] and payload(entry["stdout"]) == [issue]
         assert capture("revision", ["vc", "status", "--json"])["success"]
         assert not capture("missing", ["show", "--id=compat-missing", "--json"])["success"]
         event_args = ["events", "tail", "--since", "0", "--json"]
@@ -107,9 +121,45 @@ def main():
             events = capture("events-enabled", event_args)
             assert events["success"]
             assert json.loads(events["stdout"].splitlines()[-1])["issue_id"] == "compat-ready"
+            # Keep all pruning and writer activity inside this disposable store.
+            for key, value in (("events-journal-retain-days", "0"),
+                               ("events-journal-retain-rows", "0"),
+                               ("events-journal-auto-prune", "false")):
+                bd("config", "set", key, value)
+            head = json.loads(events["stdout"].splitlines()[-1])["seq"]
+            follow_args = ["--readonly", "events", "tail", "--since", str(head - 1), "--follow", "--json"]
+            follower = subprocess.Popen([str(binary), *follow_args], cwd=workspace,
+                                        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                assert select.select([follower.stdout], [], [], 10)[0], "follower did not start"
+                first = follower.stdout.readline().decode()
+                assert json.loads(first)["seq"] == head
+                bd("update", "compat-ready", "--title", "Pruned change")
+                bd("events", "prune", "--before", str(head + 2))
+                rest, errors = follower.communicate(timeout=10)
+                stream = first + rest.decode()
+                assert follower.returncode != 0
+                assert json.loads(stream.splitlines()[-1])["code"] == "events_journal_truncated"
+                captures.append(dict(name="events-midstream-truncated", args=follow_args,
+                                     success=False, exit_code=follower.returncode,
+                                     stdout=stream, stderr=errors.decode()))
+            finally:
+                if follower.poll() is None:
+                    follower.kill()
+                    follower.communicate()
+            initial = capture("events-initial-truncated", event_args)
+            assert not initial["success"]
+            assert payload(initial["stdout"])["code"] == "events_journal_truncated"
+            stdout_error = capture("events-stdout-error", ["events", "tail", "--since", "-1", "--json"])
+            assert not stdout_error["success"] and "error" in payload(stdout_error["stdout"])
+            bd("create", "--id", "compat-extra", "--title", "Extra ready", "--type", "task")
+            pagination = capture("pagination", ["ready", "--limit", "1", "--json"])
+            assert pagination["success"]
+            if envelope == "1":
+                assert json.loads(pagination["stdout"])["pagination"]["truncated"]
         else:
             assert not disabled["success"] and 'unknown command "events"' in disabled["stderr"]
-        result = dict(version=stamp, binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+        result = dict(envelope=envelope, version=stamp, binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                       backend="embedded", captures=captures)
         destination.parent.mkdir(parents=True, exist_ok=True)
         with destination.open("x") as output:
@@ -119,6 +169,6 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
+    if len(sys.argv) not in (4, 5):
         sys.exit(__doc__)
     main()

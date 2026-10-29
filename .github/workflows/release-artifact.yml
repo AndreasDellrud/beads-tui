@@ -39,7 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          package_version=$(cargo pkgid | sed 's/.*#//')
+          package_version=$(cargo pkgid | sed 's/.*#//; s/.*@//')
           if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
             echo "Releases must be dispatched from main, not ${GITHUB_REF}." >&2
             exit 1

@@ -1,0 +1,377 @@
+{
+  "envelope": "unset",
+  "version": "bd version 1.3.0 (f45b249ce)",
+  "binary_sha256": "fb387d28410390eb9f0ef81f242a0c789c632f0024f58fe6a8b02d3f06ea20ef",
+  "backend": "embedded",
+  "captures": [
+    {
+      "name": "active-priority",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--status",
+        "open,in_progress,blocked",
+        "--sort",
+        "priority"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-blocked\",\n    \"title\": \"blocked\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"issue_id\": \"compat-blocked\",\n        \"depends_on_id\": \"compat-ready\",\n        \"type\": \"blocks\",\n        \"created_at\": \"2026-10-29T22:35:56Z\",\n        \"created_by\": \"fixture\",\n        \"metadata\": \"{}\"\n      }\n    ],\n    \"dependency_count\": 1,\n    \"dependent_count\": 1,\n    \"comment_count\": 1\n  },\n  {\n    \"id\": \"compat-child\",\n    \"title\": \"child\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"issue_id\": \"compat-child\",\n        \"depends_on_id\": \"compat-blocked\",\n        \"type\": \"blocks\",\n        \"created_at\": \"2026-10-29T22:35:56Z\",\n        \"created_by\": \"fixture\",\n        \"metadata\": \"{}\"\n      }\n    ],\n    \"dependency_count\": 1,\n    \"dependent_count\": 0,\n    \"comment_count\": 0\n  },\n  {\n    \"id\": \"compat-ready\",\n    \"title\": \"ready\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:54Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:54Z\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 1,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "active-updated",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--status",
+        "open,in_progress,blocked",
+        "--sort",
+        "updated",
+        "--reverse"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-ready\",\n    \"title\": \"ready\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:54Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:54Z\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 1,\n    \"comment_count\": 0\n  },\n  {\n    \"id\": \"compat-blocked\",\n    \"title\": \"blocked\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"issue_id\": \"compat-blocked\",\n        \"depends_on_id\": \"compat-ready\",\n        \"type\": \"blocks\",\n        \"created_at\": \"2026-10-29T22:35:56Z\",\n        \"created_by\": \"fixture\",\n        \"metadata\": \"{}\"\n      }\n    ],\n    \"dependency_count\": 1,\n    \"dependent_count\": 1,\n    \"comment_count\": 1\n  },\n  {\n    \"id\": \"compat-child\",\n    \"title\": \"child\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"issue_id\": \"compat-child\",\n        \"depends_on_id\": \"compat-blocked\",\n        \"type\": \"blocks\",\n        \"created_at\": \"2026-10-29T22:35:56Z\",\n        \"created_by\": \"fixture\",\n        \"metadata\": \"{}\"\n      }\n    ],\n    \"dependency_count\": 1,\n    \"dependent_count\": 0,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "active-created",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--status",
+        "open,in_progress,blocked",
+        "--sort",
+        "created",
+        "--reverse"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-ready\",\n    \"title\": \"ready\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:54Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:54Z\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 1,\n    \"comment_count\": 0\n  },\n  {\n    \"id\": \"compat-blocked\",\n    \"title\": \"blocked\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"issue_id\": \"compat-blocked\",\n        \"depends_on_id\": \"compat-ready\",\n        \"type\": \"blocks\",\n        \"created_at\": \"2026-10-29T22:35:56Z\",\n        \"created_by\": \"fixture\",\n        \"metadata\": \"{}\"\n      }\n    ],\n    \"dependency_count\": 1,\n    \"dependent_count\": 1,\n    \"comment_count\": 1\n  },\n  {\n    \"id\": \"compat-child\",\n    \"title\": \"child\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"issue_id\": \"compat-child\",\n        \"depends_on_id\": \"compat-blocked\",\n        \"type\": \"blocks\",\n        \"created_at\": \"2026-10-29T22:35:56Z\",\n        \"created_by\": \"fixture\",\n        \"metadata\": \"{}\"\n      }\n    ],\n    \"dependency_count\": 1,\n    \"dependent_count\": 0,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "ready-priority",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--ready",
+        "--sort",
+        "priority"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-ready\",\n    \"title\": \"ready\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:54Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:54Z\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 1,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "ready-updated",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--ready",
+        "--sort",
+        "updated",
+        "--reverse"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-ready\",\n    \"title\": \"ready\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:54Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:54Z\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 1,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "ready-created",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--ready",
+        "--sort",
+        "created",
+        "--reverse"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-ready\",\n    \"title\": \"ready\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:54Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:54Z\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 1,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "closed-priority",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--status",
+        "closed",
+        "--sort",
+        "priority"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-closed\",\n    \"title\": \"closed\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"closed\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:57Z\",\n    \"closed_at\": \"2026-10-29T22:35:57Z\",\n    \"close_reason\": \"Closed\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 0,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "closed-updated",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--status",
+        "closed",
+        "--sort",
+        "updated",
+        "--reverse"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-closed\",\n    \"title\": \"closed\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"closed\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:57Z\",\n    \"closed_at\": \"2026-10-29T22:35:57Z\",\n    \"close_reason\": \"Closed\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 0,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "closed-created",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--status",
+        "closed",
+        "--sort",
+        "created",
+        "--reverse"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-closed\",\n    \"title\": \"closed\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"closed\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:57Z\",\n    \"closed_at\": \"2026-10-29T22:35:57Z\",\n    \"close_reason\": \"Closed\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 0,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "empty",
+      "args": [
+        "--readonly",
+        "list",
+        "--json",
+        "--limit",
+        "0",
+        "--status",
+        "deferred"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[]\n",
+      "stderr": ""
+    },
+    {
+      "name": "stdout-error",
+      "args": [
+        "--readonly",
+        "show",
+        "--id=compat-missing",
+        "--json"
+      ],
+      "success": false,
+      "exit_code": 1,
+      "stdout": "{\n  \"error\": \"no issues found matching the provided IDs\",\n  \"hint\": \"some IDs may reference deleted/purged records with no trace left in the live database \u2014 try 'bd history \\u003cid\\u003e' to check\",\n  \"schema_version\": 1\n}\n",
+      "stderr": "Issue compat-missing not found\nHint: this ID may have never existed, or may reference a deleted/purged record with no trace left in the live database \u2014 try 'bd history compat-missing'\n"
+    },
+    {
+      "name": "stderr-error",
+      "args": [
+        "--readonly",
+        "create",
+        "--title",
+        "refused",
+        "--json"
+      ],
+      "success": false,
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error: operation 'create' is not allowed in read-only mode\n"
+    },
+    {
+      "name": "show",
+      "args": [
+        "--readonly",
+        "show",
+        "--id=compat-blocked",
+        "--json",
+        "--include-comments",
+        "--include-dependents"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-blocked\",\n    \"title\": \"blocked\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"id\": \"compat-ready\",\n        \"title\": \"ready\",\n        \"description\": \"Compatibility fixture\",\n        \"status\": \"open\",\n        \"priority\": 2,\n        \"issue_type\": \"task\",\n        \"owner\": \"fixture@example.test\",\n        \"created_at\": \"2026-10-29T22:35:54Z\",\n        \"created_by\": \"fixture\",\n        \"updated_at\": \"2026-10-29T22:35:54Z\",\n        \"dependency_type\": \"blocks\"\n      }\n    ],\n    \"dependents\": [\n      {\n        \"id\": \"compat-child\",\n        \"title\": \"child\",\n        \"status\": \"open\",\n        \"priority\": 2,\n        \"issue_type\": \"task\",\n        \"created_at\": \"0001-01-01T00:00:00Z\",\n        \"updated_at\": \"0001-01-01T00:00:00Z\",\n        \"dependency_type\": \"blocks\"\n      }\n    ],\n    \"comments\": [\n      {\n        \"id\": \"1324701f-58fd-5e60-a829-65f205323e62\",\n        \"issue_id\": \"compat-blocked\",\n        \"author\": \"fixture\",\n        \"text\": \"A fixture comment\",\n        \"created_at\": \"2026-10-29T22:35:56Z\"\n      }\n    ],\n    \"dependent_count\": 1,\n    \"dependency_count\": 1,\n    \"comment_count\": 1,\n    \"revision\": \"775733611782853092\"\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "nested-show",
+      "args": [
+        "--readonly",
+        "show",
+        "--id=compat-blocked",
+        "--json",
+        "--include-comments",
+        "--include-dependents"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-blocked\",\n    \"title\": \"blocked\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"id\": \"compat-ready\",\n        \"title\": \"ready\",\n        \"description\": \"Compatibility fixture\",\n        \"status\": \"open\",\n        \"priority\": 2,\n        \"issue_type\": \"task\",\n        \"owner\": \"fixture@example.test\",\n        \"created_at\": \"2026-10-29T22:35:54Z\",\n        \"created_by\": \"fixture\",\n        \"updated_at\": \"2026-10-29T22:35:54Z\",\n        \"dependency_type\": \"blocks\"\n      }\n    ],\n    \"dependents\": [\n      {\n        \"id\": \"compat-child\",\n        \"title\": \"child\",\n        \"status\": \"open\",\n        \"priority\": 2,\n        \"issue_type\": \"task\",\n        \"created_at\": \"0001-01-01T00:00:00Z\",\n        \"updated_at\": \"0001-01-01T00:00:00Z\",\n        \"dependency_type\": \"blocks\"\n      }\n    ],\n    \"comments\": [\n      {\n        \"id\": \"1324701f-58fd-5e60-a829-65f205323e62\",\n        \"issue_id\": \"compat-blocked\",\n        \"author\": \"fixture\",\n        \"text\": \"A fixture comment\",\n        \"created_at\": \"2026-10-29T22:35:56Z\"\n      }\n    ],\n    \"dependent_count\": 1,\n    \"dependency_count\": 1,\n    \"comment_count\": 1,\n    \"revision\": \"775733611782853092\"\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "worktree-show",
+      "args": [
+        "--readonly",
+        "show",
+        "--id=compat-blocked",
+        "--json",
+        "--include-comments",
+        "--include-dependents"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-blocked\",\n    \"title\": \"blocked\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:55Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:35:55Z\",\n    \"dependencies\": [\n      {\n        \"id\": \"compat-ready\",\n        \"title\": \"ready\",\n        \"description\": \"Compatibility fixture\",\n        \"status\": \"open\",\n        \"priority\": 2,\n        \"issue_type\": \"task\",\n        \"owner\": \"fixture@example.test\",\n        \"created_at\": \"2026-10-29T22:35:54Z\",\n        \"created_by\": \"fixture\",\n        \"updated_at\": \"2026-10-29T22:35:54Z\",\n        \"dependency_type\": \"blocks\"\n      }\n    ],\n    \"dependents\": [\n      {\n        \"id\": \"compat-child\",\n        \"title\": \"child\",\n        \"status\": \"open\",\n        \"priority\": 2,\n        \"issue_type\": \"task\",\n        \"created_at\": \"0001-01-01T00:00:00Z\",\n        \"updated_at\": \"0001-01-01T00:00:00Z\",\n        \"dependency_type\": \"blocks\"\n      }\n    ],\n    \"comments\": [\n      {\n        \"id\": \"1324701f-58fd-5e60-a829-65f205323e62\",\n        \"issue_id\": \"compat-blocked\",\n        \"author\": \"fixture\",\n        \"text\": \"A fixture comment\",\n        \"created_at\": \"2026-10-29T22:35:56Z\"\n      }\n    ],\n    \"dependent_count\": 1,\n    \"dependency_count\": 1,\n    \"comment_count\": 1,\n    \"revision\": \"775733611782853092\"\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "revision",
+      "args": [
+        "--readonly",
+        "vc",
+        "status",
+        "--json"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "{\n  \"branch\": \"main\",\n  \"commit\": \"9rpgu7bjakhce8mislf8ju9o3t110q5t\",\n  \"schema_version\": 1\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "missing",
+      "args": [
+        "--readonly",
+        "show",
+        "--id=compat-missing",
+        "--json"
+      ],
+      "success": false,
+      "exit_code": 1,
+      "stdout": "{\n  \"error\": \"no issues found matching the provided IDs\",\n  \"hint\": \"some IDs may reference deleted/purged records with no trace left in the live database \u2014 try 'bd history \\u003cid\\u003e' to check\",\n  \"schema_version\": 1\n}\n",
+      "stderr": "Issue compat-missing not found\nHint: this ID may have never existed, or may reference a deleted/purged record with no trace left in the live database \u2014 try 'bd history compat-missing'\n"
+    },
+    {
+      "name": "events-disabled",
+      "args": [
+        "--readonly",
+        "events",
+        "tail",
+        "--since",
+        "0",
+        "--json"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "note: the events journal is disabled for this workspace (enable with 'bd config set events-journal true'); any records shown were written while it was enabled, and new mutations are not being recorded\n"
+    },
+    {
+      "name": "events-enabled",
+      "args": [
+        "--readonly",
+        "events",
+        "tail",
+        "--since",
+        "0",
+        "--json"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "{\"seq\":1,\"ts\":\"2026-10-29T22:36:01Z\",\"op\":\"update\",\"issue_id\":\"compat-ready\",\"actor\":\"fixture\",\"issue\":{\"id\":\"compat-ready\",\"title\":\"Ready changed\",\"description\":\"Compatibility fixture\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\",\"owner\":\"fixture@example.test\",\"created_at\":\"2026-10-29T22:35:54Z\",\"created_by\":\"fixture\",\"updated_at\":\"2026-10-29T22:36:01Z\"}}\n",
+      "stderr": ""
+    },
+    {
+      "name": "events-midstream-truncated",
+      "args": [
+        "--readonly",
+        "events",
+        "tail",
+        "--since",
+        "0",
+        "--follow",
+        "--json"
+      ],
+      "success": false,
+      "exit_code": 1,
+      "stdout": "{\"seq\":1,\"ts\":\"2026-10-29T22:36:01Z\",\"op\":\"update\",\"issue_id\":\"compat-ready\",\"actor\":\"fixture\",\"issue\":{\"id\":\"compat-ready\",\"title\":\"Ready changed\",\"description\":\"Compatibility fixture\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\",\"owner\":\"fixture@example.test\",\"created_at\":\"2026-10-29T22:35:54Z\",\"created_by\":\"fixture\",\"updated_at\":\"2026-10-29T22:36:01Z\"}}\n{\"code\":\"events_journal_truncated\",\"error\":\"events journal truncated: checkpoint 1 is below the retained window [3..2]; records 2..2 were pruned\",\"floor\":3,\"head\":2,\"since\":1}\n",
+      "stderr": ""
+    },
+    {
+      "name": "events-initial-truncated",
+      "args": [
+        "--readonly",
+        "events",
+        "tail",
+        "--since",
+        "0",
+        "--json"
+      ],
+      "success": false,
+      "exit_code": 1,
+      "stdout": "{\n  \"code\": \"events_journal_truncated\",\n  \"error\": \"events journal truncated: checkpoint 0 is below the retained window [3..2]; records 1..2 were pruned\",\n  \"floor\": 3,\n  \"head\": 2,\n  \"schema_version\": 1,\n  \"since\": 0\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "events-stdout-error",
+      "args": [
+        "--readonly",
+        "events",
+        "tail",
+        "--since",
+        "-1",
+        "--json"
+      ],
+      "success": false,
+      "exit_code": 1,
+      "stdout": "{\n  \"error\": \"--since must be zero or a positive sequence number (got -1); use 0 to read from the beginning\",\n  \"schema_version\": 1\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "pagination",
+      "args": [
+        "--readonly",
+        "ready",
+        "--limit",
+        "1",
+        "--json"
+      ],
+      "success": true,
+      "exit_code": 0,
+      "stdout": "[\n  {\n    \"id\": \"compat-ready\",\n    \"title\": \"Pruned change\",\n    \"description\": \"Compatibility fixture\",\n    \"status\": \"open\",\n    \"priority\": 2,\n    \"issue_type\": \"task\",\n    \"owner\": \"fixture@example.test\",\n    \"created_at\": \"2026-10-29T22:35:54Z\",\n    \"created_by\": \"fixture\",\n    \"updated_at\": \"2026-10-29T22:36:02Z\",\n    \"dependency_count\": 0,\n    \"dependent_count\": 1,\n    \"comment_count\": 0\n  }\n]\n",
+      "stderr": "Showing 1 of 2 ready issues. Use --limit 0 for all, or --limit N to raise the cap.\n"
+    }
+  ]
+}
