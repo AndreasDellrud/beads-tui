@@ -2,6 +2,8 @@
 
 ## 2026-10-29
 
+- Prepared the 0.4.1 patch release for responsive managed AI startup, preserving foreground terminal handoff and the existing Linux release workflow.
+
 - Moved Herdr AI startup and confirmation waits to a background worker, with persistent pending status, responsive navigation, one launch at a time, visible results and errors, and a quit guard that avoids abandoning startup. Foreground terminal handoff remains synchronous.
 
 ## 2026-09-29

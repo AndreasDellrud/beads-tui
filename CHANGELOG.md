@@ -4,6 +4,11 @@ All notable changes to `btui` are recorded here.
 
 ## Unreleased
 
+## 0.4.1 - 2026-10-29
+
+- Keep navigation, filtering, resizing and refresh responsive while Herdr creates a worktree, starts an AI agent or waits for startup confirmation.
+- Show pending task startup and return success, warnings and failures to the TUI. Prevent overlapping launches and wait for startup to finish before normal quit so worktree creation and prompt delivery are not abandoned.
+
 ## 0.4.0 - 2026-09-29
 
 - Qualify the read-only CLI adapter against Beads 1.2.2 and 1.3.0, including linked workspaces.
