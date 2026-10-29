@@ -16,7 +16,9 @@ Different tasks may start concurrently; a task already starting cannot be launch
 again, even with a different executor. Pending feedback identifies one launch or
 lists the active task IDs. Completions are independent and refresh Beads after
 success. Warnings, failures and unexpectedly disconnected workers identify their
-task and remain dismissible; another task's success does not clear them. Navigation,
+task and are queued individually; Escape dismisses one outcome and exposes the
+next, with the remaining error count shown in the footer. Another task's success
+or a new launch does not clear unseen errors. Navigation,
 filtering, refresh and redraw continue during startup and confirmation waits.
 Foreground handoff and normal quit wait until all managed startups return so the
 process cannot abandon partial worktrees or prompt delivery. Foreground agents

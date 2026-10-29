@@ -445,14 +445,21 @@ fn footer_areas(area: Rect) -> (Rect, Rect) {
 
 fn work_status_line(app: &App) -> Option<Line<'static>> {
     let pending = app.pending_work_message();
-    let outcome = app.work_error.as_deref().or(app.work_message.as_deref());
+    let error = app.work_error().map(|error| {
+        if app.work_error_count() > 1 {
+            format!("{} errors · {error}", app.work_error_count())
+        } else {
+            error.to_owned()
+        }
+    });
+    let outcome = error.as_deref().or(app.work_message.as_deref());
     let message = match (pending.as_deref(), outcome) {
         (Some(pending), Some(outcome)) => Some(format!("{pending} · {outcome}")),
         (Some(pending), None) => Some(pending.to_owned()),
         (None, Some(outcome)) => Some(outcome.to_owned()),
         (None, None) => None,
     };
-    if app.work_error.is_some() {
+    if error.is_some() {
         launch_status_line(None, message.as_deref())
     } else {
         launch_status_line(message.as_deref(), None)

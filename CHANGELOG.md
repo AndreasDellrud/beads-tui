@@ -6,7 +6,7 @@ All notable changes to `btui` are recorded here.
 
 ## 0.4.2 - 2026-10-29
 
-- Allow different Herdr tasks to start concurrently while preventing duplicate pending starts of the same task. Preserve each task's startup errors and warnings when another task finishes successfully.
+- Allow different Herdr tasks to start concurrently while preventing duplicate pending starts of the same task. Keep pending tasks visible beside completion feedback, and let startup errors and warnings be dismissed individually without losing another task's outcome.
 
 ## 0.4.1 - 2026-10-29
 

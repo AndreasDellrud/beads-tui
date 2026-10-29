@@ -304,7 +304,7 @@ pub struct App {
     pub loading_detail: bool,
     pub relationship_index: usize,
     pub work_message: Option<String>,
-    pub work_error: Option<String>,
+    work_errors: VecDeque<String>,
     pending_launches: Vec<ManagedLaunch>,
     list_page_len: usize,
     relationship_page_len: usize,
@@ -357,7 +357,7 @@ impl App {
             loading_detail: false,
             relationship_index: 0,
             work_message: None,
-            work_error: None,
+            work_errors: VecDeque::new(),
             pending_launches: Vec::new(),
             list_page_len: 0,
             relationship_page_len: 0,
@@ -561,11 +561,8 @@ impl App {
             self.work_message = Some(messages.join(" · "));
             self.refresh();
         }
-        if !errors.is_empty() {
-            if let Some(previous) = self.work_error.take() {
-                errors.insert(0, previous);
-            }
-            self.work_error = Some(errors.join(" · "));
+        for error in errors {
+            self.push_work_error(error);
         }
     }
 
@@ -611,7 +608,7 @@ impl App {
             ));
             return;
         }
-        self.clear_work_feedback();
+        self.clear_work_success();
         let issue_id = request.issue_id.clone();
         match ManagedLaunch::start(request, agent, workspace_id) {
             Ok(launch) => self.pending_launches.push(launch),
@@ -619,27 +616,38 @@ impl App {
         }
     }
 
-    pub fn clear_work_feedback(&mut self) {
-        self.work_message = None;
-        self.work_error = None;
-    }
-
     pub fn clear_work_success(&mut self) {
         self.work_message = None;
     }
 
+    pub fn work_error(&self) -> Option<&str> {
+        self.work_errors.front().map(String::as_str)
+    }
+
+    pub fn work_error_count(&self) -> usize {
+        self.work_errors.len()
+    }
+
     pub fn dismiss_work_error(&mut self) -> bool {
-        self.work_error.take().is_some()
+        self.work_errors.pop_front().is_some()
+    }
+
+    fn push_work_error(&mut self, error: String) {
+        if !self.work_errors.contains(&error) {
+            self.work_errors.push_back(error);
+        }
     }
 
     pub fn report_work_started(&mut self, message: String, warning: Option<String>) {
         self.work_message = Some(message);
-        self.work_error = warning;
+        if let Some(warning) = warning {
+            self.push_work_error(warning);
+        }
     }
 
     pub fn report_work_error(&mut self, error: impl Into<String>) {
         self.work_message = None;
-        self.work_error = Some(error.into());
+        self.push_work_error(error.into());
     }
 
     fn refresh_quietly(&mut self) {
@@ -1320,13 +1328,13 @@ mod tests {
         app.poll();
         assert!(app.pending_work_message().unwrap().contains("btui-1"));
         assert!(!app.ensure_no_pending_launch());
+        app.dismiss_work_error();
         let request = WorkRequest::for_issue(&issue("btui-1", "v1"), "/unused".into()).unwrap();
         for agent in [AgentKind::Codex, AgentKind::Claude] {
             app.start_managed_work(request.clone(), agent, "unused".into());
             assert_eq!(app.pending_launches.len(), 1);
             assert!(
-                app.work_error
-                    .as_deref()
+                app.work_error()
                     .unwrap()
                     .contains("btui-1 is already starting")
             );
@@ -1418,12 +1426,12 @@ mod tests {
         release_second.send(()).unwrap();
         wait_until(app, |app| app.pending_launches.len() == 1);
         let failure = "btui-2: startup failed; session preserved";
-        assert_eq!(app.work_error.as_deref(), Some(failure));
+        assert_eq!(app.work_error(), Some(failure));
         assert!(app.pending_work_message().unwrap().contains("btui-1"));
         release_first.send(()).unwrap();
         wait_until(app, |app| app.pending_launches.is_empty());
         assert_eq!(app.work_message.as_deref(), Some("Started btui-1"));
-        assert_eq!(app.work_error.as_deref(), Some(failure));
+        assert_eq!(app.work_error(), Some(failure));
         assert!(app.ensure_no_pending_launch());
         app.dismiss_work_error();
         let (retry, release_retry) = held_launch("btui-2", started("btui-2"));
@@ -1431,14 +1439,21 @@ mod tests {
         release_retry.send(()).unwrap();
         wait_until(app, |app| app.pending_launches.is_empty());
         assert_eq!(app.work_message.as_deref(), Some("Started btui-2"));
-        assert!(app.work_error.is_none());
+        assert!(app.work_error().is_none());
     }
 
     #[test]
-    fn concurrent_startup_failures_and_warnings_remain_identifiable_until_dismissed() {
+    fn concurrent_failures_and_warnings_are_individually_dismissible_on_both_screens() {
+        use ratatui::{Terminal, backend::TestBackend};
         let mut harness = test_app(Duration::ZERO, false);
         let app = &mut harness.app;
-        let (first, release_first) = held_launch("btui-1", Err(anyhow::anyhow!("first failed")));
+        let (first, release_first) = held_launch(
+            "btui-1",
+            Err(anyhow::anyhow!(
+                "first failed {}",
+                "long diagnostic ".repeat(30)
+            )),
+        );
         let (second, release_second) = held_launch(
             "btui-2",
             Ok(crate::work::LaunchReport {
@@ -1450,12 +1465,43 @@ mod tests {
         release_first.send(()).unwrap();
         release_second.send(()).unwrap();
         wait_until(app, |app| app.pending_launches.is_empty());
-        let feedback = app.work_error.as_deref().unwrap();
-        assert!(feedback.contains("btui-1: first failed"));
-        assert!(feedback.contains("btui-2: focus failed"));
-        assert_eq!(app.work_message.as_deref(), Some("Started btui-2"));
-        assert!(app.dismiss_work_error());
-        assert!(app.work_error.is_none());
+        assert_eq!(app.work_error_count(), 2);
+        // Later success and transient-feedback clearing must not discard unseen outcomes.
+        app.report_work_started("Another task started".into(), None);
+        app.clear_work_success();
+        let mut seen = Vec::new();
+        while let Some(error) = app.work_error() {
+            let id = error.split(':').next().unwrap().to_owned();
+            seen.push(error.to_owned());
+            for screen in [Screen::Browser, Screen::Issue] {
+                app.screen = screen;
+                for width in [80, 140] {
+                    let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
+                    terminal
+                        .draw(|frame| crate::ui::draw(frame, app, None))
+                        .unwrap();
+                    let text: String = terminal
+                        .backend()
+                        .buffer()
+                        .content()
+                        .iter()
+                        .map(|cell| cell.symbol())
+                        .collect();
+                    assert!(text.contains(&id));
+                }
+            }
+            assert!(app.dismiss_work_error());
+        }
+        assert!(
+            seen.iter()
+                .any(|error| error.contains("btui-1: first failed"))
+        );
+        assert!(
+            seen.iter()
+                .any(|error| error.contains("btui-2: focus failed"))
+        );
+        assert_eq!(app.work_error_count(), 0);
+        assert!(!app.dismiss_work_error());
     }
 
     #[test]
@@ -1811,10 +1857,10 @@ mod tests {
 
         harness.app.clear_work_success();
         assert_eq!(harness.app.work_message, None);
-        assert_eq!(harness.app.work_error.as_deref(), Some("focus warning"));
+        assert_eq!(harness.app.work_error(), Some("focus warning"));
 
         assert!(harness.app.dismiss_work_error());
-        assert_eq!(harness.app.work_error, None);
+        assert_eq!(harness.app.work_error(), None);
         assert!(!harness.app.dismiss_work_error());
     }
 

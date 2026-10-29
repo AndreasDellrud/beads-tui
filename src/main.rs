@@ -227,7 +227,7 @@ fn start_work(
     agent: Option<AgentKind>,
     force_foreground: bool,
 ) -> Result<()> {
-    app.clear_work_feedback();
+    app.clear_work_success();
     let Some(agent) = agent else {
         app.report_work_error("no supported agent found; install `codex` or `claude`");
         return Ok(());
@@ -303,7 +303,7 @@ fn launch_foreground(
 }
 
 fn shift_agent(app: &mut App, agents: &mut AgentSelection, forward: bool) {
-    app.clear_work_feedback();
+    app.clear_work_success();
     let result = if forward {
         agents.next_agent()
     } else {
