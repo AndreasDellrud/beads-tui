@@ -1,6 +1,6 @@
 [package]
 name = "beads-tui"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 rust-version = "1.88"
 description = "A human-friendly terminal browser and work-session launcher for Beads"

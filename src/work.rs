@@ -133,6 +133,7 @@ pub struct LaunchReport {
 
 /// Owns one managed startup. Polling never waits for a subprocess or confirmation.
 pub struct ManagedLaunch {
+    issue_id: String,
     message: String,
     result: Receiver<Result<LaunchReport, String>>,
 }
@@ -144,12 +145,13 @@ impl ManagedLaunch {
             agent.display_name(),
             request.issue_id
         );
-        Self::spawn(message, move || {
+        Self::spawn(request.issue_id.clone(), message, move || {
             WorkLauncher::default().launch_herdr(&request, agent, &workspace_id)
         })
     }
 
     pub(crate) fn spawn(
+        issue_id: String,
         message: String,
         operation: impl FnOnce() -> Result<LaunchReport> + Send + 'static,
     ) -> Result<Self> {
@@ -161,7 +163,15 @@ impl ManagedLaunch {
                 let _ = sender.send(outcome);
             })
             .context("could not start the AI startup worker")?;
-        Ok(Self { message, result })
+        Ok(Self {
+            issue_id,
+            message,
+            result,
+        })
+    }
+
+    pub fn issue_id(&self) -> &str {
+        &self.issue_id
     }
 
     pub fn message(&self) -> &str {
@@ -577,6 +587,7 @@ mod tests {
     fn managed_worker_disconnection_is_a_visible_failure() {
         let (sender, result) = mpsc::channel();
         let launch = ManagedLaunch {
+            issue_id: "btui-1".into(),
             message: "Starting".into(),
             result,
         };
