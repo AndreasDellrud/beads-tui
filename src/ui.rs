@@ -146,7 +146,9 @@ fn draw_issue_screen(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>)
 
     let (status_area, keybindings_area) = footer_areas(page[2]);
     let status = if let Some(status) = launch_status_line(
-        app.pending_work_message().or(app.work_message.as_deref()),
+        app.work_message
+            .as_deref()
+            .or(app.pending_work_message().as_deref()),
         app.work_error.as_deref(),
     ) {
         status
@@ -486,7 +488,9 @@ fn event_status_line(error: &str) -> Line<'static> {
 
 fn draw_browser_status(frame: &mut Frame, area: Rect, app: &App) {
     let line = if let Some(status) = launch_status_line(
-        app.pending_work_message().or(app.work_message.as_deref()),
+        app.work_message
+            .as_deref()
+            .or(app.pending_work_message().as_deref()),
         app.work_error.as_deref(),
     ) {
         status

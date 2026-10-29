@@ -305,7 +305,7 @@ pub struct App {
     pub relationship_index: usize,
     pub work_message: Option<String>,
     pub work_error: Option<String>,
-    pending_launch: Option<ManagedLaunch>,
+    pending_launches: Vec<ManagedLaunch>,
     list_page_len: usize,
     relationship_page_len: usize,
     preview_scroll_max: u16,
@@ -358,7 +358,7 @@ impl App {
             relationship_index: 0,
             work_message: None,
             work_error: None,
-            pending_launch: None,
+            pending_launches: Vec::new(),
             list_page_len: 0,
             relationship_page_len: 0,
             preview_scroll_max: 0,
@@ -381,16 +381,7 @@ impl App {
     }
 
     pub fn poll(&mut self) {
-        if let Some(result) = self.pending_launch.as_ref().and_then(ManagedLaunch::poll) {
-            self.pending_launch = None;
-            match result {
-                Ok(report) => {
-                    self.report_work_started(report.message, report.warning);
-                    self.refresh();
-                }
-                Err(error) => self.report_work_error(error),
-            }
-        }
+        self.poll_work_launches();
         if let Some(monitor) = &self.event_monitor {
             let update = monitor.poll();
             self.event_refresh_error = update.error;
@@ -546,14 +537,58 @@ impl App {
         }
     }
 
-    pub fn pending_work_message(&self) -> Option<&str> {
-        self.pending_launch.as_ref().map(ManagedLaunch::message)
+    fn poll_work_launches(&mut self) {
+        let mut messages = Vec::new();
+        let mut errors = Vec::new();
+        let mut index = 0;
+        while index < self.pending_launches.len() {
+            let Some(result) = self.pending_launches[index].poll() else {
+                index += 1;
+                continue;
+            };
+            let launch = self.pending_launches.remove(index);
+            match result {
+                Ok(report) => {
+                    messages.push(report.message);
+                    if let Some(warning) = report.warning {
+                        errors.push(format!("{}: {warning}", launch.issue_id()));
+                    }
+                }
+                Err(error) => errors.push(format!("{}: {error}", launch.issue_id())),
+            }
+        }
+        if !messages.is_empty() {
+            self.work_message = Some(messages.join(" · "));
+            self.refresh();
+        }
+        if !errors.is_empty() {
+            if let Some(previous) = self.work_error.take() {
+                errors.insert(0, previous);
+            }
+            self.work_error = Some(errors.join(" · "));
+        }
+    }
+
+    pub fn pending_work_message(&self) -> Option<String> {
+        match self.pending_launches.as_slice() {
+            [] => None,
+            [launch] => Some(launch.message().to_owned()),
+            launches => Some(format!(
+                "Starting {} tasks in Herdr: {}",
+                launches.len(),
+                launches
+                    .iter()
+                    .map(ManagedLaunch::issue_id)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        }
     }
 
     // Do not abandon startup between worktree creation and prompt delivery.
     pub fn ensure_no_pending_launch(&mut self) -> bool {
         if let Some(message) = self.pending_work_message() {
-            self.report_work_error(format!("{message} Wait for startup before launching again or quitting; resolve any confirmation in Herdr."));
+            self.report_work_error(format!("{message} Wait for startup before quitting or handing over this terminal; resolve any confirmation in Herdr."));
             return false;
         }
         true
@@ -565,13 +600,22 @@ impl App {
         agent: AgentKind,
         workspace_id: String,
     ) {
-        if !self.ensure_no_pending_launch() {
+        if self
+            .pending_launches
+            .iter()
+            .any(|launch| launch.issue_id() == request.issue_id)
+        {
+            self.report_work_error(format!(
+                "{} is already starting; wait for its startup to finish",
+                request.issue_id
+            ));
             return;
         }
         self.clear_work_feedback();
+        let issue_id = request.issue_id.clone();
         match ManagedLaunch::start(request, agent, workspace_id) {
-            Ok(launch) => self.pending_launch = Some(launch),
-            Err(error) => self.report_work_error(format!("{error:#}")),
+            Ok(launch) => self.pending_launches.push(launch),
+            Err(error) => self.report_work_error(format!("{issue_id}: {error:#}")),
         }
     }
 
@@ -1239,23 +1283,35 @@ mod tests {
         }
     }
 
+    fn held_launch(
+        id: &str,
+        outcome: Result<crate::work::LaunchReport>,
+    ) -> (ManagedLaunch, Sender<()>) {
+        let (release, wait) = mpsc::channel();
+        let launch =
+            ManagedLaunch::spawn(id.into(), format!("Starting Codex for {id}"), move || {
+                wait.recv().unwrap();
+                outcome
+            })
+            .unwrap();
+        (launch, release)
+    }
+
+    fn started(id: &str) -> Result<crate::work::LaunchReport> {
+        Ok(crate::work::LaunchReport {
+            message: format!("Started {id}"),
+            warning: None,
+        })
+    }
+
     #[test]
     fn managed_startup_keeps_navigation_and_both_screens_responsive() {
         use ratatui::{Terminal, backend::TestBackend};
         let mut harness = test_app(Duration::ZERO, false);
         let app = &mut harness.app;
         wait_until(app, |app| !app.loading_list);
-        let (release, wait) = mpsc::channel();
-        app.pending_launch = Some(
-            ManagedLaunch::spawn("Starting Codex for btui-1".into(), move || {
-                wait.recv().unwrap();
-                Ok(crate::work::LaunchReport {
-                    message: "Started btui-1".into(),
-                    warning: Some("focus failed".into()),
-                })
-            })
-            .unwrap(),
-        );
+        let (launch, release) = held_launch("btui-1", started("btui-1"));
+        app.pending_launches.push(launch);
         let generation = app.generation;
         app.select_next();
         assert_eq!(app.selected_issue().unwrap().id, "btui-2");
@@ -1264,10 +1320,17 @@ mod tests {
         app.poll();
         assert!(app.pending_work_message().unwrap().contains("btui-1"));
         assert!(!app.ensure_no_pending_launch());
-        let request =
-            WorkRequest::for_issue(app.selected_issue().unwrap(), "/unused".into()).unwrap();
-        app.start_managed_work(request, AgentKind::Codex, "unused".into());
-        assert!(app.pending_work_message().unwrap().contains("btui-1"));
+        let request = WorkRequest::for_issue(&issue("btui-1", "v1"), "/unused".into()).unwrap();
+        for agent in [AgentKind::Codex, AgentKind::Claude] {
+            app.start_managed_work(request.clone(), agent, "unused".into());
+            assert_eq!(app.pending_launches.len(), 1);
+            assert!(
+                app.work_error
+                    .as_deref()
+                    .unwrap()
+                    .contains("btui-1 is already starting")
+            );
+        }
         app.dismiss_work_error();
         for screen in [Screen::Browser, Screen::Issue] {
             app.screen = screen;
@@ -1285,10 +1348,9 @@ mod tests {
             assert!(text.contains("Starting Codex for btui-1"));
         }
         release.send(()).unwrap();
-        wait_until(app, |app| app.pending_work_message().is_none());
+        wait_until(app, |app| app.pending_launches.is_empty());
         assert!(app.ensure_no_pending_launch());
         assert_eq!(app.work_message.as_deref(), Some("Started btui-1"));
-        assert_eq!(app.work_error.as_deref(), Some("focus failed"));
         assert!(
             app.generation > generation,
             "successful startup must refresh Beads"
@@ -1296,32 +1358,62 @@ mod tests {
     }
 
     #[test]
-    fn managed_startup_failure_is_visible_and_allows_retry() {
+    fn managed_startups_complete_out_of_order_without_losing_another_tasks_error() {
         let mut harness = test_app(Duration::ZERO, false);
         let app = &mut harness.app;
-        app.pending_launch = Some(
-            ManagedLaunch::spawn("Starting".into(), || {
-                bail!("startup failed: session preserved")
-            })
-            .unwrap(),
+        let (first, release_first) = held_launch("btui-1", started("btui-1"));
+        let (second, release_second) = held_launch(
+            "btui-2",
+            Err(anyhow::anyhow!("startup failed; session preserved")),
         );
-        wait_until(app, |app| app.pending_work_message().is_none());
-        assert_eq!(
-            app.work_error.as_deref(),
-            Some("startup failed: session preserved")
-        );
+        app.pending_launches.extend([first, second]);
+        let pending = app.pending_work_message().unwrap();
+        assert!(pending.contains("2 tasks"));
+        assert!(pending.contains("btui-1") && pending.contains("btui-2"));
+        app.poll();
+        assert_eq!(app.pending_launches.len(), 2);
+        assert!(!app.ensure_no_pending_launch());
+        app.dismiss_work_error();
+        release_second.send(()).unwrap();
+        wait_until(app, |app| app.pending_launches.len() == 1);
+        let failure = "btui-2: startup failed; session preserved";
+        assert_eq!(app.work_error.as_deref(), Some(failure));
+        assert!(app.pending_work_message().unwrap().contains("btui-1"));
+        release_first.send(()).unwrap();
+        wait_until(app, |app| app.pending_launches.is_empty());
+        assert_eq!(app.work_message.as_deref(), Some("Started btui-1"));
+        assert_eq!(app.work_error.as_deref(), Some(failure));
         assert!(app.ensure_no_pending_launch());
-        app.pending_launch = Some(
-            ManagedLaunch::spawn("Retrying".into(), || {
-                Ok(crate::work::LaunchReport {
-                    message: "Retry succeeded".into(),
-                    warning: None,
-                })
-            })
-            .unwrap(),
+        app.dismiss_work_error();
+        let (retry, release_retry) = held_launch("btui-2", started("btui-2"));
+        app.pending_launches.push(retry);
+        release_retry.send(()).unwrap();
+        wait_until(app, |app| app.pending_launches.is_empty());
+        assert_eq!(app.work_message.as_deref(), Some("Started btui-2"));
+        assert!(app.work_error.is_none());
+    }
+
+    #[test]
+    fn concurrent_startup_failures_and_warnings_remain_identifiable_until_dismissed() {
+        let mut harness = test_app(Duration::ZERO, false);
+        let app = &mut harness.app;
+        let (first, release_first) = held_launch("btui-1", Err(anyhow::anyhow!("first failed")));
+        let (second, release_second) = held_launch(
+            "btui-2",
+            Ok(crate::work::LaunchReport {
+                message: "Started btui-2".into(),
+                warning: Some("focus failed".into()),
+            }),
         );
-        wait_until(app, |app| app.pending_work_message().is_none());
-        assert_eq!(app.work_message.as_deref(), Some("Retry succeeded"));
+        app.pending_launches.extend([first, second]);
+        release_first.send(()).unwrap();
+        release_second.send(()).unwrap();
+        wait_until(app, |app| app.pending_launches.is_empty());
+        let feedback = app.work_error.as_deref().unwrap();
+        assert!(feedback.contains("btui-1: first failed"));
+        assert!(feedback.contains("btui-2: focus failed"));
+        assert_eq!(app.work_message.as_deref(), Some("Started btui-2"));
+        assert!(app.dismiss_work_error());
         assert!(app.work_error.is_none());
     }
 
