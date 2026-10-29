@@ -10,6 +10,16 @@
 4. `src/agent.rs` owns the supported executor registry and selected default. It detects executable Codex and Claude Code installations on `PATH` in stable order, restores the selected stable ID from the XDG configuration directory, and atomically persists shifts. Missing, malformed, and unavailable selections fall back without introducing an Omarchy or Herdr preference dependency.
 5. `src/work.rs` translates one selected issue into an executor-neutral work request. It rejects closed, blocked, and deferred issues, constructs a canonical ID-only prompt and sanitized branch name, and launches processes directly without a shell. Outside Herdr it starts the selected executable with the repository as its working directory and hands over the foreground terminal. Inside a complete `HERDR_ENV` context it creates a labeled branch-backed worktree workspace, starts a uniquely named agent using the selected Herdr kind, submits the same prompt, and focuses it. The linked worktree isolates the agent's branch from the checkout running `btui`. Prompt submission asks Herdr to observe initial activity: a five-second timeout is accepted only when the agent is demonstrably working, while an idle login/setup screen remains a visible preserved-session error. When Herdr detects a hook-trust or other startup confirmation screen, the launcher preserves and focuses that agent, waits up to five minutes for it to become ready, and then submits the original prompt without bypassing trust. Only failures before a matching agent exists remove the newly created worktree; timeout, cancellation, and later failures preserve the live session for inspection. A final focus failure also preserves the agent and becomes a visible warning. `Shift-W` provides an explicit foreground retry.
 
+Managed startup runs on a dedicated standard-library worker in `src/work.rs`.
+`App` polls its result without waiting, keeps the original task and executor visible
+while browsing, and refreshes Beads after success. Warnings and failures return to
+the normal dismissible feedback state; an unexpectedly disconnected worker is also
+a visible failure. Only one startup may be pending. Further launches, including
+foreground launches, and normal quit wait until startup returns so the process
+cannot abandon a partial worktree or prompt delivery. Navigation, filtering,
+refresh and redraw continue during startup and confirmation waits. Foreground
+agents still take over the current terminal synchronously.
+
 The process inherits its working directory so Beads and launched agents resolve the same workspace a direct command would. It owns no issue persistence and calls no mutating `bd` command. Readiness checks, claiming, implementation, and closure belong to the visible agent session after it has successfully launched. Foreground agents create their own branch; Herdr creates the branch atomically with the isolated worktree before starting the agent.
 
 ```text

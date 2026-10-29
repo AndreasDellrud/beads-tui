@@ -2,6 +2,8 @@ use std::{
     env, io,
     path::PathBuf,
     process::{Command, ExitStatus, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
 };
 
 use anyhow::{Context, Result, bail};
@@ -127,6 +129,54 @@ impl CommandRunner for ProcessRunner {
 pub struct LaunchReport {
     pub message: String,
     pub warning: Option<String>,
+}
+
+/// Owns one managed startup. Polling never waits for a subprocess or confirmation.
+pub struct ManagedLaunch {
+    message: String,
+    result: Receiver<Result<LaunchReport, String>>,
+}
+
+impl ManagedLaunch {
+    pub fn start(request: WorkRequest, agent: AgentKind, workspace_id: String) -> Result<Self> {
+        let message = format!(
+            "Starting {} for {} in Herdr…",
+            agent.display_name(),
+            request.issue_id
+        );
+        Self::spawn(message, move || {
+            WorkLauncher::default().launch_herdr(&request, agent, &workspace_id)
+        })
+    }
+
+    pub(crate) fn spawn(
+        message: String,
+        operation: impl FnOnce() -> Result<LaunchReport> + Send + 'static,
+    ) -> Result<Self> {
+        let (sender, result) = mpsc::channel();
+        thread::Builder::new()
+            .name("btui-ai-startup".to_owned())
+            .spawn(move || {
+                let outcome = operation().map_err(|error| format!("{error:#}"));
+                let _ = sender.send(outcome);
+            })
+            .context("could not start the AI startup worker")?;
+        Ok(Self { message, result })
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn poll(&self) -> Option<Result<LaunchReport, String>> {
+        match self.result.try_recv() {
+            Ok(result) => Some(result),
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => Some(Err(
+                "AI startup worker stopped unexpectedly; inspect Herdr before retrying".to_owned(),
+            )),
+        }
+    }
 }
 
 pub struct WorkLauncher<R = ProcessRunner> {
@@ -521,6 +571,24 @@ mod tests {
             dependents: Vec::new(),
             comments: Vec::new(),
         }
+    }
+
+    #[test]
+    fn managed_worker_disconnection_is_a_visible_failure() {
+        let (sender, result) = mpsc::channel();
+        let launch = ManagedLaunch {
+            message: "Starting".into(),
+            result,
+        };
+        assert!(launch.poll().is_none());
+        drop(sender);
+        assert!(
+            launch
+                .poll()
+                .unwrap()
+                .unwrap_err()
+                .contains("stopped unexpectedly")
+        );
     }
 
     #[test]
