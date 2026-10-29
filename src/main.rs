@@ -155,7 +155,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
 
         if app.screen == Screen::Issue {
             match code {
-                KeyCode::Char('q') => return Ok(()),
+                KeyCode::Char('q') if app.ensure_no_pending_launch() => return Ok(()),
                 KeyCode::Esc | KeyCode::Backspace => app.close_issue(),
                 KeyCode::Down | KeyCode::Char('j') => app.scroll(ScrollPane::IssueBody, 2),
                 KeyCode::Up | KeyCode::Char('k') => app.scroll(ScrollPane::IssueBody, -2),
@@ -192,7 +192,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
         }
 
         match code {
-            KeyCode::Char('q') => return Ok(()),
+            KeyCode::Char('q') if app.ensure_no_pending_launch() => return Ok(()),
             KeyCode::Char('/') => app.filtering = true,
             KeyCode::Char('r') => app.refresh(),
             KeyCode::Enter => app.open_selected_issue(),
@@ -227,6 +227,9 @@ fn start_work(
     agent: Option<AgentKind>,
     force_foreground: bool,
 ) -> Result<()> {
+    if !app.ensure_no_pending_launch() {
+        return Ok(());
+    }
     app.clear_work_feedback();
     let Some(agent) = agent else {
         app.report_work_error("no supported agent found; install `codex` or `claude`");
@@ -251,7 +254,6 @@ fn start_work(
     } else {
         LaunchTarget::detect()
     };
-    let foreground = matches!(&target, LaunchTarget::Foreground);
     let result = match target {
         LaunchTarget::Foreground => {
             app.stop_event_monitor();
@@ -259,9 +261,10 @@ fn start_work(
             app.start_event_monitor();
             result
         }
-        LaunchTarget::Herdr { workspace_id } => launcher
-            .launch_herdr(&request, agent, &workspace_id)
-            .map_err(|error| anyhow::anyhow!("{error:#}")),
+        LaunchTarget::Herdr { workspace_id } => {
+            app.start_managed_work(request, agent, workspace_id);
+            return Ok(());
+        }
     };
     match result {
         Ok(LaunchReport { message, warning }) => {
@@ -270,9 +273,7 @@ fn start_work(
         }
         Err(error) => {
             app.report_work_error(format!("{error:#}"));
-            if foreground {
-                app.refresh();
-            }
+            app.refresh();
         }
     }
     Ok(())

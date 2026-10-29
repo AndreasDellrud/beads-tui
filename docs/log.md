@@ -1,5 +1,9 @@
 # Documentation log
 
+## 2026-10-29
+
+- Moved Herdr AI startup and confirmation waits to a background worker, with persistent pending status, responsive navigation, one launch at a time, visible results and errors, and a quit guard that avoids abandoning startup. Foreground terminal handoff remains synchronous.
+
 ## 2026-09-29
 
 - Passed owner-delegated final 0.4.0 terminal acceptance at 140×34 and 80×24, including resize/navigation and terminal/mouse restoration after normal and missing-workspace-error exits.
