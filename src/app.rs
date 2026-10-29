@@ -1617,6 +1617,42 @@ mod tests {
     }
 
     #[test]
+    fn invalid_response_keeps_last_good_view_and_ignores_superseded_results() {
+        let mut harness = test_app(Duration::ZERO, false);
+        wait_until(&mut harness.app, |app| !app.loading_list);
+        let app = &mut harness.app;
+        app.select_last();
+        let issues = app.issues.clone();
+        let detail = app.detail.clone();
+        let (send, responses) = mpsc::channel();
+        app.loader.responses = responses;
+        app.generation += 1;
+        let generation = app.generation;
+        send.send(LoadResponse::List {
+            generation,
+            result: Err("unsupported bd schema_version 2; btui supports schema 1".into()),
+        })
+        .unwrap();
+        send.send(LoadResponse::List {
+            generation: generation - 1,
+            result: Ok(Vec::new()),
+        })
+        .unwrap();
+        app.poll();
+        assert_eq!(app.issues, issues);
+        assert_eq!(app.detail, detail);
+        assert_eq!(app.selected_issue().unwrap().id, "btui-2");
+        assert!(app.error.as_deref().unwrap().contains("schema_version 2"));
+        send.send(LoadResponse::List {
+            generation,
+            result: Ok(issues),
+        })
+        .unwrap();
+        app.poll();
+        assert!(app.error.is_none());
+    }
+
+    #[test]
     fn background_failure_is_recoverable_ui_state() {
         let mut harness = test_app(Duration::ZERO, true);
 

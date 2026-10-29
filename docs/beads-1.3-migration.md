@@ -133,8 +133,7 @@ This accepts those manual refresh paths, not the entire recovery matrix.
 The 0.4.0 release scope is optional event-triggered authoritative refresh plus
 the qualified legacy fallback. It does not claim reduced CLI work or direct
 application of event snapshots. Selective deltas remain in `btui-jdn.3`, the
-broader qualification matrix in `btui-jdn.4`, and the future JSON-envelope
-transition in `btui-b2l`.
+broader qualification matrix in `btui-jdn.4`, and JSON-envelope qualification is recorded below (`btui-b2l`).
 
 Local 0.4.0 release preparation passed `scripts/validate` (71 tests, formatting
 and lint) on Rust 1.98.1 and the CI minimum Rust 1.88.0. Cargo package verification
@@ -152,6 +151,73 @@ terminal attributes, alternate-screen exit and mouse-capture release verified
 after normal and error-screen exit. This is delegated automated acceptance, not
 a claim that the owner personally inspected both layouts. The publication
 workflow remains governed by [the release procedure](releasing.md).
+
+## JSON-envelope qualification
+
+On 2026-10-29, `btui-b2l` qualified the existing readonly commands in fresh,
+separate embedded stores. No live database was upgraded or downgraded.
+
+| Binary | `BD_JSON_ENVELOPE` | Command contract | Event contract |
+| --- | --- | --- | --- |
+| 1.2.2 (`6c124203e`) | unset | Legacy arrays/objects | Unsupported command; polling fallback |
+| 1.3.0 (`f45b249ce`) | unset | Legacy arrays/objects | Raw JSONL; legacy initial truncation |
+| 1.3.0 (`f45b249ce`) | `0` | Legacy arrays/objects | Raw JSONL; legacy initial truncation |
+| 1.3.0 (`f45b249ce`) | `1` | Schema-1 envelopes | Raw JSONL; enveloped initial truncation |
+
+All 1.3.0 modes retain a raw single-line mid-follow truncation error. The harness
+starts a real follower, observes its first record, then mutates/prunes the fixture
+journal before its next poll. Initial and mid-follow captures replay through the
+same bounded reader used by the application and trigger rebaselining. Ordinary
+events remain invalidations; this work does not implement selective replay.
+
+Captures in `tests/fixtures/bd-1.2.2-json-matrix.json` and
+`tests/fixtures/bd-1.3.0-json-{unset,0,1}.json` record binary SHA-256, mode, exact
+arguments, stdout, stderr and exit status. Existing earlier fixtures are retained.
+The downloaded 1.2.2 Linux amd64 archive matched its release checksum
+`8140098a51d3b81d5548d1c5e6db1a2d9930e5d141efe2a4bff7d079c4d321e8`.
+The 1.3.0 binary is the same payload as the earlier qualified release.
+
+Reproduce each capture without installing a binary or changing global variables:
+
+```bash
+./scripts/qualify-bd /absolute/path/to/bd 1.3.0 /tmp/new-envelope-capture.json 1
+# Final argument: unset (default), 0, or 1; use a new output path for each run.
+```
+
+The matrix covers all nine list view/sort combinations, enriched show,
+nested/worktree discovery, revision status, empty results, omitted optional
+fields, missing-ID stdout JSON plus plain stderr, and readonly refusal on stderr.
+A negative event cursor additionally qualifies stdout-only structured failure.
+Synthetic adapter tests cover structured errors with optional code/hint on either
+pipe, including pretty-printed event stderr, and successful exits carrying errors
+or unexpected diagnostics. Pagination is captured using a deliberately limited
+ready query; btui's own unlimited list rejects truncated metadata. Invalid shapes,
+non-integer/unsupported schema versions and malformed metadata have explicit
+failure tests. Application tests retain the selected last-good view on error and
+reject superseded responses before allowing a subsequent successful refresh.
+
+Automated real-PTY smoke passed for all four matrix rows at 140×34: browsing,
+enriched comments, active/closed views, sorting, manual refresh, filtering,
+1.3.0 event-driven title updates, normal exit, alternate-screen exit and terminal
+attribute restoration. The final envelope-mode run also injected a schema-2
+list response through a fixture-only executable wrapper: the error stayed visible,
+the last good title stayed on screen, and a successful retry cleared the error.
+A direct real-terminal stderr probe observed the legacy
+deprecation notice in 1.3.0 unset/`0` modes and its absence in `1`; captured pipes
+did not produce that notice. This is automated terminal evidence, not owner
+visual acceptance or Windows/macOS acceptance.
+
+The authoritative GitHub release listing checked on 2026-10-29 had latest stable
+v1.3.2 and no v2.0 release/prerelease in the 100 returned recent releases. This change
+qualifies 1.2.2 and 1.3.0 only. Future v2.0, newer 1.x binaries, server/proxied
+backends, and other platforms require separate qualification; accepting the
+announced schema-1 shape is not proof of those runtimes. No global
+`BD_JSON_ENVELOPE=0` escape hatch is used.
+
+Pinned sources: [JSON schema contract](https://github.com/gastownhall/beads/blob/v1.3.0/docs/reference/json-schema.md),
+[output.go](https://github.com/gastownhall/beads/blob/v1.3.0/cmd/bd/output.go),
+[errors.go](https://github.com/gastownhall/beads/blob/v1.3.0/cmd/bd/errors.go), and
+[events.go](https://github.com/gastownhall/beads/blob/v1.3.0/cmd/bd/events.go).
 
 ## Live workspace upgrade
 

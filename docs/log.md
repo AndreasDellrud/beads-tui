@@ -2,6 +2,8 @@
 
 ## 2026-10-29
 
+- Qualified legacy and schema-1 enveloped Beads responses with real 1.2.2/1.3.0 binaries, captured initial/mid-follow event framing, preserved both diagnostic streams, and verified last-good-state retention and the four-mode real-terminal smoke. Recorded tested support and unqualified future-version/backend limits.
+
 - Prepared the 0.4.1 patch release for responsive managed AI startup, preserving foreground terminal handoff and the existing Linux release workflow.
 
 - Moved Herdr AI startup and confirmation waits to a background worker, with persistent pending status, responsive navigation, one launch at a time, visible results and errors, and a quit guard that avoids abandoning startup. Foreground terminal handoff remains synchronous.
