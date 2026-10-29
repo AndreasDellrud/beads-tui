@@ -4,6 +4,17 @@ All notable changes to `btui` are recorded here.
 
 ## Unreleased
 
+## 0.4.3 - 2026-10-29
+
+- Accept both legacy Beads JSON and schema-1 envelopes when users enable `BD_JSON_ENVELOPE=1`, without overriding their environment. Qualify Beads 1.2.2 legacy and 1.3.0 unset/0/1 modes; future Beads 2.0 remains unqualified.
+- Preserve stdout and stderr diagnostics, reject malformed or unsupported schemas and truncated snapshots visibly, and keep the last good view available on failure.
+- Handle enveloped initial event-truncation errors while preserving ordinary JSONL and mid-follow error framing, polling fallback and recovery.
+- Extract release versions correctly from Cargo package IDs in named worktrees so local archives retain their canonical filenames.
+
+## 0.4.2 - 2026-10-29
+
+- Allow different Herdr tasks to start concurrently while preventing duplicate pending starts of the same task. Keep pending tasks visible beside completion feedback, and let startup errors and warnings be dismissed individually without losing another task's outcome.
+
 ## 0.4.1 - 2026-10-29
 
 - Keep navigation, filtering, resizing and refresh responsive while Herdr creates a worktree, starts an AI agent or waits for startup confirmation.

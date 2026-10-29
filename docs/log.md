@@ -2,7 +2,13 @@
 
 ## 2026-10-29
 
+- Corrected release version extraction for Cargo package IDs containing a package name, preserving canonical archive names in managed worktrees.
+
+- Prepared the 0.4.3 patch release for schema-1 JSON envelopes and preserved diagnostics, based on the merged 0.4.2 concurrent-startup release.
+
 - Qualified legacy and schema-1 enveloped Beads responses with real 1.2.2/1.3.0 binaries, captured initial/mid-follow event framing, preserved both diagnostic streams, and verified last-good-state retention and the four-mode real-terminal smoke. Recorded tested support and unqualified future-version/backend limits.
+
+- Replaced the global managed-startup guard with task-specific duplicate prevention, allowing different tasks to start concurrently and preserving independent errors and warnings.
 
 - Prepared the 0.4.1 patch release for responsive managed AI startup, preserving foreground terminal handoff and the existing Linux release workflow.
 

@@ -227,10 +227,7 @@ fn start_work(
     agent: Option<AgentKind>,
     force_foreground: bool,
 ) -> Result<()> {
-    if !app.ensure_no_pending_launch() {
-        return Ok(());
-    }
-    app.clear_work_feedback();
+    app.clear_work_success();
     let Some(agent) = agent else {
         app.report_work_error("no supported agent found; install `codex` or `claude`");
         return Ok(());
@@ -256,6 +253,9 @@ fn start_work(
     };
     let result = match target {
         LaunchTarget::Foreground => {
+            if !app.ensure_no_pending_launch() {
+                return Ok(());
+            }
             app.stop_event_monitor();
             let result = launch_foreground(terminal, launcher, &request, agent);
             app.start_event_monitor();
@@ -303,7 +303,7 @@ fn launch_foreground(
 }
 
 fn shift_agent(app: &mut App, agents: &mut AgentSelection, forward: bool) {
-    app.clear_work_feedback();
+    app.clear_work_success();
     let result = if forward {
         agents.next_agent()
     } else {
