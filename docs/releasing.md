@@ -21,6 +21,14 @@ Both workflows use Rust 1.88.0, the declared minimum supported version. The loca
 
 Artifacts are written to `dist/` and are not committed.
 
+## Release candidates
+
+Use a prerelease Cargo version such as `0.4.4-rc.1` for a release candidate. The same local validation and packaging steps apply. The release workflow identifies prerelease versions, marks their GitHub Releases as prereleases, and leaves the latest stable release unchanged. Stable versions continue to be published as latest.
+
+The update checker deliberately disables requests when the installed version has a prerelease suffix or build metadata. An RC therefore shows the disabled state in the `u` overlay even without `BTUI_UPDATE_CHECK=0`; use the stable-version checker tests to validate discovery and failure behavior. See [updates](updates.md) for the full policy.
+
+Preparing a local candidate does not publish, install, or tag it. Publication still requires the release preparation PR to merge into protected `main` and an explicitly authorized workflow dispatch.
+
 ## Versioned release preparation
 
 1. Update `version` in `Cargo.toml` and refresh `Cargo.lock`.

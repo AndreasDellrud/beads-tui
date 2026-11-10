@@ -1,6 +1,6 @@
 [package]
 name = "beads-tui"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2024"
 rust-version = "1.88"
 description = "A human-friendly terminal browser and work-session launcher for Beads"
@@ -21,3 +21,5 @@ anyhow = "1"
 ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+semver = "1.0.27"
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }

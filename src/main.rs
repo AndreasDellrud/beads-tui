@@ -56,6 +56,19 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
             Event::Mouse(mouse) => {
                 let size = terminal.size()?;
                 let area = Rect::new(0, 0, size.width, size.height);
+                if app.update_info_open {
+                    match mouse.kind {
+                        MouseEventKind::ScrollUp => {
+                            app.update_info_scroll = app.update_info_scroll.saturating_sub(3)
+                        }
+                        MouseEventKind::ScrollDown => {
+                            app.update_info_scroll = app.update_info_scroll.saturating_add(3)
+                        }
+                        _ => {}
+                    }
+                    last_click = None;
+                    continue;
+                }
                 match mouse.kind {
                     MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
                         last_click = None;
@@ -148,6 +161,33 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
             }
             _ => continue,
         };
+        match update_action(code, app.update_info_open, app.filtering && !from_mouse) {
+            UpdateAction::Open => {
+                app.update_info_open = true;
+                app.update_info_scroll = 0;
+                continue;
+            }
+            UpdateAction::Close => {
+                app.update_info_open = false;
+                continue;
+            }
+            UpdateAction::Recheck => {
+                app.updates.recheck();
+                continue;
+            }
+            UpdateAction::Scroll(step) => {
+                app.update_info_scroll = app.update_info_scroll.saturating_add_signed(step);
+                continue;
+            }
+            UpdateAction::Quit => {
+                if app.ensure_no_pending_launch() {
+                    return Ok(());
+                }
+                continue;
+            }
+            UpdateAction::Ignore => continue,
+            UpdateAction::PassThrough => {}
+        }
         app.clear_work_success();
         if code == KeyCode::Esc && app.dismiss_work_error() {
             continue;
@@ -217,6 +257,37 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
             KeyCode::PageUp => app.scroll(ScrollPane::Preview, -8),
             _ => {}
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum UpdateAction {
+    PassThrough,
+    Open,
+    Close,
+    Recheck,
+    Scroll(i16),
+    Quit,
+    Ignore,
+}
+
+fn update_action(code: KeyCode, open: bool, filtering: bool) -> UpdateAction {
+    if open {
+        return match code {
+            KeyCode::Esc | KeyCode::Char('u') => UpdateAction::Close,
+            KeyCode::Char('r') => UpdateAction::Recheck,
+            KeyCode::Up | KeyCode::Char('k') => UpdateAction::Scroll(-2),
+            KeyCode::Down | KeyCode::Char('j') => UpdateAction::Scroll(2),
+            KeyCode::PageUp => UpdateAction::Scroll(-8),
+            KeyCode::PageDown => UpdateAction::Scroll(8),
+            KeyCode::Char('q') => UpdateAction::Quit,
+            _ => UpdateAction::Ignore,
+        };
+    }
+    if code == KeyCode::Char('u') && !filtering {
+        UpdateAction::Open
+    } else {
+        UpdateAction::PassThrough
     }
 }
 
@@ -336,6 +407,52 @@ mod tests {
     use anyhow::bail;
 
     use super::while_terminal_suspended;
+
+    #[test]
+    fn update_overlay_preserves_filter_typing_and_captures_other_actions() {
+        use super::{UpdateAction, update_action};
+        use ratatui::crossterm::event::KeyCode;
+        assert_eq!(
+            update_action(KeyCode::Char('u'), false, true),
+            UpdateAction::PassThrough
+        );
+        assert_eq!(
+            update_action(KeyCode::Char('u'), false, false),
+            UpdateAction::Open
+        );
+        assert_eq!(
+            update_action(KeyCode::Esc, true, false),
+            UpdateAction::Close
+        );
+        assert_eq!(
+            update_action(KeyCode::Char('u'), true, false),
+            UpdateAction::Close
+        );
+        assert_eq!(
+            update_action(KeyCode::Char('r'), true, false),
+            UpdateAction::Recheck
+        );
+        assert_eq!(
+            update_action(KeyCode::Char('q'), true, false),
+            UpdateAction::Quit
+        );
+        assert_eq!(
+            update_action(KeyCode::PageDown, true, false),
+            UpdateAction::Scroll(8)
+        );
+        for key in [
+            KeyCode::Char('w'),
+            KeyCode::Enter,
+            KeyCode::Char('1'),
+            KeyCode::Tab,
+        ] {
+            assert_eq!(update_action(key, true, false), UpdateAction::Ignore);
+        }
+        assert_eq!(
+            update_action(KeyCode::Char('r'), false, false),
+            UpdateAction::PassThrough
+        );
+    }
 
     #[test]
     fn terminal_is_resumed_when_the_child_cannot_start() {

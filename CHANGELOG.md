@@ -4,6 +4,13 @@ All notable changes to `btui` are recorded here.
 
 ## Unreleased
 
+## 0.4.4 - 2026-11-10
+
+- Add bounded stable-release discovery without blocking task browsing, with an update notice and a scrollable `u` information overlay.
+- Show disabled, checking, current, available, and failure states; allow manual rechecks with a 15-minute cooldown and opt out with `BTUI_UPDATE_CHECK=0`.
+- Explain manual binary, source, and package-manager updates without downloading or installing updates. Prerelease builds disable network checks.
+- Mark release candidates as GitHub prereleases without replacing the latest stable release when publishing through the release workflow.
+
 ## 0.4.3 - 2026-10-29
 
 - Accept both legacy Beads JSON and schema-1 envelopes when users enable `BD_JSON_ENVELOPE=1`, without overriding their environment. Qualify Beads 1.2.2 legacy and 1.3.0 unset/0/1 modes; future Beads 2.0 remains unqualified.
