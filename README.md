@@ -76,6 +76,7 @@ You only need `bd` on `PATH` to browse. Starting work sessions additionally requ
 | `w` / `W` | Start work / force a foreground agent session |
 | `a` / `A` | Select the next / previous installed agent |
 | `r` | Refresh in the background |
+| `u` | Open update information (`r` rechecks there; `Esc` closes) |
 | `Esc` / `Backspace` | Dismiss an error or return to the browser |
 | `q` | Quit |
 
@@ -120,6 +121,12 @@ visible errors while retaining the last good view. Structured failures preserve
 both stdout and stderr diagnostics. Event JSONL framing remains separate.
 See [qualification evidence and limits](docs/beads-1.3-migration.md#json-envelope-qualification).
 This does not claim compatibility with an untested Beads v2.0 release.
+
+## Update checks
+
+Stable builds check the latest [GitHub release](https://github.com/AndreasDellrud/beads-tui/releases/latest) once at startup, in the background. A small notice appears when a newer stable version is available. Press `u` for versions, the release link, manual installation guidance, or check diagnostics. Inside the overlay, `r` rechecks after a 15-minute cooldown; arrows, page keys, and the mouse wheel scroll.
+
+Set `BTUI_UPDATE_CHECK=0` before starting `btui` to disable all update requests. Prerelease and build-metadata versions also disable checks automatically. There are no periodic checks or persistent cache, and `btui` never downloads or installs updates. See [update behavior and manual instructions](docs/updates.md) for network limits and installation paths.
 
 ## Project boundaries
 

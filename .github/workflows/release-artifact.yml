@@ -35,6 +35,7 @@ jobs:
         run: rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt
 
       - name: Validate release request
+        id: request
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,6 +49,11 @@ jobs:
             echo "Requested ${RELEASE_TAG}, but Cargo.toml contains ${package_version}." >&2
             exit 1
           fi
+          prerelease=false
+          if [[ "${package_version%%+*}" == *-* ]]; then
+            prerelease=true
+          fi
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "Release ${RELEASE_TAG} already exists; refusing to overwrite it." >&2
             exit 1
@@ -78,7 +84,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: btui ${{ env.RELEASE_TAG }}
           generate_release_notes: true
-          make_latest: true
+          prerelease: ${{ steps.request.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.request.outputs.prerelease != 'true' }}
           fail_on_unmatched_files: true
           working_directory: dist
           files: |

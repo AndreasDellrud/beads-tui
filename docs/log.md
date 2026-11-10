@@ -1,5 +1,11 @@
 # Documentation log
 
+## 2026-11-10
+
+- Selected the native HTTP release-discovery implementation for local `0.4.4-rc.1` preparation. Documented disabled network checks in prerelease builds and made release publication distinguish prereleases from latest stable releases.
+
+- Documented bounded stable-release discovery, the update information overlay, opt-out and cooldown policy, and manual binary/source/package-manager update paths.
+
 ## 2026-10-29
 
 - Corrected release version extraction for Cargo package IDs containing a package name, preserving canonical archive names in managed worktrees.

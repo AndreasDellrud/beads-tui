@@ -41,4 +41,8 @@ The next slice adds one deliberate control action without turning `btui` into an
 
 `btui` still performs no Beads mutation itself. It does not pre-claim a task. Foreground branch creation remains the agent's responsibility; Herdr creates a branch as part of the isolated worktree operation so the checkout running `btui` is never switched. It never bypasses agent trust: confirmation remains an explicit user decision, and a live blocked or timed-out Herdr session is preserved rather than silently deleted. Executor-specific process control stays behind a task-to-session boundary so another adapter can be added without changing selection or lifecycle policy. The selected default belongs to `btui` and does not depend on Omarchy. Shell is deliberately excluded until it can satisfy the same prompt and lifecycle contract.
 
+## Release discovery
+
+Stable builds check GitHub once at startup without blocking browsing. A restrained header notice and `u` information overlay expose newer stable versions, their release link, check failures, and manual installation guidance. Users can opt out with `BTUI_UPDATE_CHECK=0`; prerelease and build-metadata versions disable checks automatically. Manual rechecks have a 15-minute cooldown, with no periodic work or persistent cache. Downloading, installing, replacing executables, and upgrading dependencies remain outside the product. See [updates](updates.md) for the complete policy.
+
 Live scope and sequencing belong in Beads, not this page.

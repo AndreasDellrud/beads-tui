@@ -4,13 +4,14 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, Padding, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap},
 };
 
 use crate::{
     agent::AgentKind,
     app::{App, Screen, ScrollPane},
     bd::Issue,
+    update::UpdateState,
 };
 
 const INK: Color = Color::Rgb(205, 214, 244);
@@ -25,8 +26,21 @@ const RED: Color = Color::Rgb(243, 139, 168);
 pub fn draw(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>) {
     if app.screen == Screen::Issue {
         draw_issue_screen(frame, app, agent);
-        return;
+    } else {
+        draw_browser_screen(frame, app, agent);
     }
+    draw_update_notice(frame, app.updates.state());
+    if app.update_info_open {
+        draw_update_overlay(
+            frame,
+            app.updates.state(),
+            app.updates.remaining_cooldown(),
+            &mut app.update_info_scroll,
+        );
+    }
+}
+
+fn draw_browser_screen(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>) {
     let page = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(8),
@@ -164,6 +178,110 @@ fn draw_issue_screen(frame: &mut Frame, app: &mut App, agent: Option<AgentKind>)
     };
     frame.render_widget(Paragraph::new(status), status_area);
     draw_keybindings(frame, keybindings_area, issue_keybindings(agent));
+}
+
+fn draw_update_notice(frame: &mut Frame, state: &UpdateState) {
+    if let UpdateState::Available(notice) = state {
+        let area = frame.area();
+        if area.height >= 3 {
+            frame.render_widget(
+                Paragraph::new(format!(" u · btui {} available ", notice.available))
+                    .style(Style::default().fg(GREEN)),
+                Rect::new(area.x, area.y + 1, area.width, 1),
+            );
+        }
+    }
+}
+
+fn update_text(state: &UpdateState, cooldown: std::time::Duration) -> Text<'static> {
+    let mut lines = vec![Line::from(format!(
+        "Installed: {}",
+        env!("CARGO_PKG_VERSION")
+    ))];
+    match state {
+        UpdateState::Disabled => lines.push(Line::from(
+            "Checks disabled: BTUI_UPDATE_CHECK=0 or this is a prerelease/development build.",
+        )),
+        UpdateState::Checking => {
+            lines.push(Line::from("Checking GitHub for the latest stable release…"))
+        }
+        UpdateState::UpToDate => lines.push(Line::from("No newer stable release is available.")),
+        UpdateState::Available(notice) => {
+            lines[0] = Line::from(format!("Installed: {}", notice.installed));
+            lines.push(Line::styled(
+                format!("Available: {}", notice.available),
+                Style::default().fg(GREEN),
+            ));
+            lines.push(Line::from(notice.url.clone()));
+        }
+        UpdateState::Failed(error) => {
+            lines.push(Line::styled(
+                "Update check failed; browsing remains available.",
+                Style::default().fg(YELLOW),
+            ));
+            lines.push(Line::from(error.clone()));
+        }
+    }
+    lines.push(Line::default());
+    if !matches!(state, UpdateState::Disabled | UpdateState::Checking) {
+        lines.push(Line::from(if cooldown.is_zero() {
+            "r checks again".to_owned()
+        } else {
+            format!(
+                "Recheck available in {} min (15 min between attempts).",
+                cooldown.as_secs().div_ceil(60)
+            )
+        }));
+    }
+    lines.extend([
+        Line::from("One startup check; no periodic checks or persistent cache."),
+        Line::default(),
+        Line::styled("Update manually", Style::default().fg(MAUVE).add_modifier(Modifier::BOLD)),
+        Line::from("Releases: https://github.com/AndreasDellrud/beads-tui/releases/latest"),
+        Line::from("Binary: download the matching archive and checksum, verify SHA-256, then replace your installed btui after exiting."),
+        Line::from("Source: obtain the desired release checkout, then run cargo install --path . --locked there."),
+        Line::from("Package manager: use the same manager that installed btui; availability may lag GitHub."),
+        Line::from("btui never downloads or installs an update. Disable checks with BTUI_UPDATE_CHECK=0."),
+    ]);
+    Text::from(lines)
+}
+
+fn draw_update_overlay(
+    frame: &mut Frame,
+    state: &UpdateState,
+    cooldown: std::time::Duration,
+    scroll: &mut u16,
+) {
+    let area = frame.area();
+    // Keep the information reachable even when the terminal cannot fit the whole panel.
+    let width = area.width.min(88);
+    let height = area.height.min(24);
+    let popup = Rect::new(
+        area.x + (area.width - width) / 2,
+        area.y + (area.height - height) / 2,
+        width,
+        height,
+    );
+    frame.render_widget(Clear, popup);
+    let block = panel(" btui updates ".to_owned());
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+    let [content, help] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
+    let paragraph = Paragraph::new(update_text(state, cooldown))
+        .style(Style::default().fg(INK))
+        .wrap(Wrap { trim: false });
+    let max_scroll = paragraph
+        .line_count(content.width)
+        .saturating_sub(usize::from(content.height))
+        .min(usize::from(u16::MAX)) as u16;
+    *scroll = (*scroll).min(max_scroll);
+    frame.render_widget(paragraph.scroll((*scroll, 0)), content);
+    frame.render_widget(
+        Paragraph::new("u/esc close · r recheck · ↑/↓ scroll · q quit")
+            .style(Style::default().fg(MUTED)),
+        help,
+    );
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
@@ -595,6 +713,7 @@ fn controls(screen: Screen, agent: Option<AgentKind>) -> Vec<(String, KeyCode)> 
         ("a/A agent".into(), KeyCode::Char('a')),
         ("r refresh".into(), KeyCode::Char('r')),
         ("q quit".into(), KeyCode::Char('q')),
+        ("u updates".into(), KeyCode::Char('u')),
     ]);
     controls
 }
@@ -731,6 +850,107 @@ fn selected_row_style(style: Style, selected: bool) -> Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rendered_updates(state: &UpdateState, width: u16, height: u16, scroll: &mut u16) -> String {
+        let backend = ratatui::backend::TestBackend::new(width, height);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| {
+                draw_update_overlay(frame, state, std::time::Duration::from_secs(900), scroll)
+            })
+            .unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    }
+
+    #[test]
+    fn overlay_explains_every_checker_state_without_an_install_action() {
+        let cases = [
+            (UpdateState::Disabled, "Checks disabled"),
+            (UpdateState::Checking, "Checking GitHub"),
+            (UpdateState::UpToDate, "No newer stable"),
+            (
+                UpdateState::Failed("network offline".into()),
+                "network offline",
+            ),
+            (
+                UpdateState::Available(crate::update::ReleaseNotice {
+                    installed: "0.4.3".into(),
+                    available: "0.5.0".into(),
+                    url: "https://github.com/AndreasDellrud/beads-tui/releases/tag/v0.5.0".into(),
+                }),
+                "Available: 0.5.0",
+            ),
+        ];
+        for (state, expected) in cases {
+            let text = rendered_updates(&state, 100, 30, &mut 0);
+            assert!(text.contains(expected), "missing {expected}");
+            assert!(text.contains("Installed:"));
+            assert!(text.contains("Update manually"));
+            assert!(text.contains("u/esc close"));
+            assert!(!text.contains("press i"));
+        }
+    }
+
+    #[test]
+    fn available_release_link_and_recheck_cooldown_are_visible() {
+        let url = "https://github.com/AndreasDellrud/beads-tui/releases/tag/v0.5.0";
+        let state = UpdateState::Available(crate::update::ReleaseNotice {
+            installed: "0.4.3".into(),
+            available: "0.5.0".into(),
+            url: url.into(),
+        });
+        let text = rendered_updates(&state, 100, 30, &mut 0);
+        assert!(text.contains(url));
+        assert!(text.contains("Recheck available in 15 min"));
+    }
+
+    #[test]
+    fn short_overlay_scroll_reaches_manual_guidance_and_clamps() {
+        let state = UpdateState::Failed("offline".into());
+        let mut scroll = u16::MAX;
+        let text = rendered_updates(&state, 55, 12, &mut scroll);
+        assert!(text.contains("BTUI_UPDATE_CHECK=0"));
+        assert!(scroll > 0 && scroll < u16::MAX);
+        for (width, height) in [(1, 1), (10, 3), (40, 8)] {
+            rendered_updates(&state, width, height, &mut scroll);
+        }
+    }
+
+    #[test]
+    fn only_available_releases_show_a_header_notice() {
+        for state in [
+            UpdateState::Failed("offline".into()),
+            UpdateState::UpToDate,
+            UpdateState::Available(crate::update::ReleaseNotice {
+                installed: "0.4.3".into(),
+                available: "0.5.0".into(),
+                url: "https://example.invalid".into(),
+            }),
+        ] {
+            let backend = ratatui::backend::TestBackend::new(70, 20);
+            let mut terminal = ratatui::Terminal::new(backend).unwrap();
+            terminal
+                .draw(|frame| draw_update_notice(frame, &state))
+                .unwrap();
+            let text: String = terminal
+                .backend()
+                .buffer()
+                .content()
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect();
+            assert_eq!(
+                text.contains("u · btui 0.5.0 available"),
+                matches!(state, UpdateState::Available(_))
+            );
+        }
+    }
 
     #[test]
     fn launch_status_is_separate_from_persistent_keybindings() {

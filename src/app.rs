@@ -283,6 +283,9 @@ impl Drop for Prefetcher {
 }
 
 pub struct App {
+    pub updates: crate::update::UpdateChecker,
+    pub update_info_open: bool,
+    pub update_info_scroll: u16,
     pub issues: Vec<Issue>,
     pub visible: Vec<usize>,
     pub detail: Option<Issue>,
@@ -331,11 +334,15 @@ impl App {
     pub fn load() -> Self {
         let mut app = Self::with_source(Box::new(CliSource));
         app.start_event_monitor();
+        app.updates = crate::update::UpdateChecker::start();
         app
     }
 
     fn with_source(source: Box<dyn IssueSource>) -> Self {
         let mut app = Self {
+            updates: crate::update::UpdateChecker::disabled(),
+            update_info_open: false,
+            update_info_scroll: 0,
             issues: Vec::new(),
             visible: Vec::new(),
             detail: None,
@@ -381,6 +388,7 @@ impl App {
     }
 
     pub fn poll(&mut self) {
+        self.updates.poll();
         self.poll_work_launches();
         if let Some(monitor) = &self.event_monitor {
             let update = monitor.poll();
