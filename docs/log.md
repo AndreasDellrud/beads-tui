@@ -2,6 +2,8 @@
 
 ## 2026-11-10
 
+- Prepared stable `0.4.4` from the reviewed release candidate after PR #13 passed CI and Codex review with no findings. Stable builds enable release discovery under the documented opt-out policy.
+
 - Selected the native HTTP release-discovery implementation for local `0.4.4-rc.1` preparation. Documented disabled network checks in prerelease builds and made release publication distinguish prereleases from latest stable releases.
 
 - Documented bounded stable-release discovery, the update information overlay, opt-out and cooldown policy, and manual binary/source/package-manager update paths.
